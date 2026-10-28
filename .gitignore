@@ -9,3 +9,6 @@ build/
 DerivedData/
 .build/
 .swiftpm/
+
+# 임베딩 모델 업로드 폴더 (Tools/prepare_embedding_model.py가 만든다)
+dist/
