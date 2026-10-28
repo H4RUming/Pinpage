@@ -5,13 +5,13 @@
 
 ## 개발 환경
 
-- macOS 14 이상, Xcode 16 이상 (Swift 6)
+- Apple Silicon Mac, macOS 14 이상, Xcode 16 이상 (Swift 6)
 - XcodeGen: `brew install xcodegen`
 
 ```bash
 make test      # 핵심 로직 테스트 (Packages/PinpageCore)
 make run       # Xcode 프로젝트 생성 → Debug 빌드 → 실행
-make release   # Release Universal 빌드 (Apple Silicon + Intel)
+make release   # Release 빌드 (Apple Silicon 전용)
 ```
 
 `Pinpage.xcodeproj`와 `App/Info.plist`는 `project.yml`에서 생성하므로 git에 넣지 않습니다.
@@ -20,7 +20,7 @@ Xcode로 작업하려면 `make project` 후 `Pinpage.xcodeproj`를 여세요.
 ## 구조
 
 ```
-project.yml                 XcodeGen 프로젝트 정의 (ATS 예외, 샌드박스 끔, Universal 빌드)
+project.yml                 XcodeGen 프로젝트 정의 (ATS 예외, 샌드박스 끔, arm64 전용)
 Packages/PinpageCore/       UI 없는 핵심 로직과 테스트
   Settings/                 설정 모델, 검증, 저장, 내보내기·불러오기
   LLM/                      주소 정규화, OpenAI 호환 클라이언트, 재시도, 한국어 오류 메시지

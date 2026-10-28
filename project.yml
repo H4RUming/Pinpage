@@ -50,8 +50,5 @@ targets:
         DEVELOPMENT_TEAM: ""
         ENABLE_HARDENED_RUNTIME: NO
         ENABLE_APP_SANDBOX: NO
-      configs:
-        Release:
-          # Apple Silicon + Intel Universal 빌드
-          ARCHS: $(ARCHS_STANDARD)
-          ONLY_ACTIVE_ARCH: NO
+        # Apple Silicon 전용 (임베딩 모델을 앱 안에서 Neural Engine/GPU로 돌린다)
+        ARCHS: arm64
