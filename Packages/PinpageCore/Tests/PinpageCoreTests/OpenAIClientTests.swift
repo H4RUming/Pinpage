@@ -197,6 +197,14 @@ struct OpenAIClientTests {
         #expect(StubURLProtocol.requests.first?.url?.path == "/v1/embeddings")
     }
 
+    @Test("임베딩 API가 없는 서버는 따로 안내한다")
+    func embeddingsNotSupported() async throws {
+        StubURLProtocol.install { _ in .http(status: 404, body: self.json(["detail": "Not Found"])) }
+        let error = await #expect(throws: LLMRequestError.self) { try await client().testEmbedding(model: "qwen") }
+        #expect(error?.kind == .embeddingsNotSupported)
+        #expect(error?.message.contains("BM25") == true)
+    }
+
     @Test("모델을 고르지 않으면 요청하지 않는다")
     func modelNotSelected() async throws {
         StubURLProtocol.install { _ in .http(status: 200, body: Data()) }

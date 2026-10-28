@@ -12,6 +12,8 @@ public enum LLMErrorKind: Equatable, Sendable {
     case unauthorized(hasKey: Bool)
     /// 주소는 맞지만 OpenAI 호환 API 경로가 없음 (포트가 다른 서비스인 경우 등)
     case endpointNotFound
+    /// LLM 서버는 맞지만 임베딩 API(/v1/embeddings)가 없음 (생성 모델만 띄운 vLLM 등)
+    case embeddingsNotSupported
     case modelNotFound(model: String)
     case modelNotSelected
     case rateLimited
@@ -45,6 +47,7 @@ public enum LLMErrorKind: Equatable, Sendable {
         case .secureConnectionFailed: "secure_connection_failed"
         case .unauthorized: "unauthorized"
         case .endpointNotFound: "endpoint_not_found"
+        case .embeddingsNotSupported: "embeddings_not_supported"
         case .modelNotFound: "model_not_found"
         case .modelNotSelected: "model_not_selected"
         case .rateLimited: "rate_limited"
@@ -111,6 +114,8 @@ public struct LLMRequestError: Error, LocalizedError, Equatable, Sendable {
                 : "이 서버는 API 키가 필요합니다. 설정에서 API 키를 입력하세요."
         case .endpointNotFound:
             "이 주소에서 OpenAI 호환 API를 찾을 수 없습니다(404). 포트 번호가 맞는지, LLM 서버(vLLM 등)의 주소인지 확인하세요."
+        case .embeddingsNotSupported:
+            "이 서버는 임베딩 API(/v1/embeddings)를 제공하지 않습니다. 임베딩 서버 주소를 따로 지정하거나, 임베딩 모델을 '사용 안 함'으로 두면 키워드 검색(BM25)만 사용합니다."
         case .modelNotFound(let model):
             "서버에 '\(model)' 모델이 없습니다. [모델 불러오기]로 목록을 새로 받아 다시 선택하세요."
         case .modelNotSelected:
@@ -190,7 +195,7 @@ enum LLMErrorClassifier {
 
     /// HTTP 오류 상태 코드를 분류한다.
     /// - Parameter model: 요청에 쓴 모델명 (모델 목록 요청이면 nil)
-    static func kind(status: Int, body: Data, model: String?, hasKey: Bool) -> LLMErrorKind {
+    static func kind(status: Int, body: Data, model: String?, hasKey: Bool, operation: LLMOperation = .listModels) -> LLMErrorKind {
         let detail = serverMessage(from: body)
         let mentionsModel = detail?.localizedCaseInsensitiveContains("model") ?? false
 
@@ -199,7 +204,7 @@ enum LLMErrorClassifier {
             return .unauthorized(hasKey: hasKey)
         case 404:
             if let model, mentionsModel { return .modelNotFound(model: model) }
-            return .endpointNotFound
+            return operation == .embeddings ? .embeddingsNotSupported : .endpointNotFound
         case 400, 422:
             if let model, mentionsModel, let detail, looksLikeMissingModel(detail) {
                 return .modelNotFound(model: model)

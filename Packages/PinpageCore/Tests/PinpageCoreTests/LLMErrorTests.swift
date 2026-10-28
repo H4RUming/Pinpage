@@ -39,6 +39,9 @@ struct LLMErrorTests {
         #expect(LLMErrorClassifier.kind(status: 404, body: Data("404: Not Found".utf8), model: nil, hasKey: false) == .endpointNotFound)
         // FastAPI 기본 404
         #expect(LLMErrorClassifier.kind(status: 404, body: json(["detail": "Not Found"]), model: "m", hasKey: false) == .endpointNotFound)
+        // 생성 모델만 띄운 vLLM에 임베딩을 요청한 경우 (실제 vLLM 서버에서 확인)
+        #expect(LLMErrorClassifier.kind(status: 404, body: json(["detail": "Not Found"]), model: "qwen", hasKey: false, operation: .embeddings) == .embeddingsNotSupported)
+        #expect(!LLMErrorKind.embeddingsNotSupported.isRetryable)
     }
 
     @Test("서버별 '모델 없음' 응답을 알아본다")

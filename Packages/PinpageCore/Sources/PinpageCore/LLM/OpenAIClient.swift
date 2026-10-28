@@ -120,7 +120,7 @@ public struct OpenAIClient: Sendable {
                 }
                 status = http.statusCode
                 guard (200..<300).contains(http.statusCode) else {
-                    let kind = LLMErrorClassifier.kind(status: http.statusCode, body: data, model: model, hasKey: endpoint.apiKey != nil)
+                    let kind = LLMErrorClassifier.kind(status: http.statusCode, body: data, model: model, hasKey: endpoint.apiKey != nil, operation: operation)
                     throw HTTPFailure(kind: kind, status: http.statusCode)
                 }
                 guard let decoded = try? JSONDecoder().decode(Response.self, from: data) else {
