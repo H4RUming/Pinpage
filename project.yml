@@ -1,0 +1,57 @@
+name: Pinpage
+
+options:
+  bundleIdPrefix: app.pinpage
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: ko
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+packages:
+  PinpageCore:
+    path: Packages/PinpageCore
+
+targets:
+  Pinpage:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+    dependencies:
+      - package: PinpageCore
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Pinpage
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: ko
+        CFBundleLocalizations: [ko]
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSApplicationCategoryType: public.app-category.education
+        # 사용자가 입력한 임의의 http 주소(vLLM, 로컬 IP, Tailscale)에 접속해야 한다.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSLocalNetworkUsageDescription: 설정에서 입력한 LLM 서버(같은 네트워크의 컴퓨터 등)에 접속하기 위해 로컬 네트워크 접근이 필요합니다.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.pinpage.Pinpage
+        PRODUCT_NAME: Pinpage
+        GENERATE_INFOPLIST_FILE: NO
+        # 코드 서명 없이 배포한다 (ad-hoc 서명만).
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_APP_SANDBOX: NO
+      configs:
+        Release:
+          # Apple Silicon + Intel Universal 빌드
+          ARCHS: $(ARCHS_STANDARD)
+          ONLY_ACTIVE_ARCH: NO
