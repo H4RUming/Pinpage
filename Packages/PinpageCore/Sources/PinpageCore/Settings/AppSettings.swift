@@ -68,8 +68,38 @@ public struct EndpointSettings: Codable, Equatable, Sendable {
     }
 }
 
-/// 임베딩 API 설정. 모델이 비어 있으면 임베딩 없이 BM25 검색만 사용한다.
+public enum EmbeddingMode: String, Codable, CaseIterable, Sendable {
+    /// 임베딩 없이 키워드 검색(BM25)만
+    case off
+    /// 앱 안에서 Core ML 모델로 (처음 설정할 때 내려받는다)
+    case builtin
+    /// OpenAI 호환 /v1/embeddings
+    case remote
+
+    public var label: String {
+        switch self {
+        case .off: "사용 안 함 (키워드 검색만)"
+        case .builtin: "앱 내장"
+        case .remote: "원격 API"
+        }
+    }
+}
+
+/// 임베딩 설정.
 public struct EmbeddingSettings: Codable, Equatable, Sendable {
+    public var mode = EmbeddingMode.off
+
+    // 앱 내장 모델
+    /// Hugging Face 저장소와 고정 버전(커밋 해시). 모든 참가자가 같은 파일을 받도록 버전을 고정한다.
+    public var modelRepo = ""
+    public var modelRevision = ""
+    /// 저장소의 manifest.json SHA-256. 내려받기와 폴더 설치 모두 이 값으로 검증한다.
+    public var modelManifestSHA256 = ""
+    public var computeUnit = EmbeddingComputeUnit.gpu
+    /// 벡터 차원 (768, 512, 256, 128)
+    public var dimension = 768
+
+    // 원격 API
     /// true면 Chat API의 주소와 API 키를 그대로 쓴다.
     public var useChatServer = true
     public var baseURL = ""
@@ -84,19 +114,34 @@ public struct EmbeddingSettings: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case mode, modelRepo, modelRevision, modelManifestSHA256, computeUnit, dimension
         case useChatServer, baseURL, apiKey, model
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = EmbeddingSettings()
         useChatServer = try c.decode(forKey: .useChatServer, default: true)
         baseURL = try c.decode(forKey: .baseURL, default: "")
         apiKey = try c.decode(forKey: .apiKey, default: "")
         model = try c.decode(forKey: .model, default: "")
+        // mode가 없던 이전 파일: 원격 모델이 지정돼 있으면 원격, 아니면 끔
+        mode = try c.decodeIfPresent(EmbeddingMode.self, forKey: .mode) ?? (model.isEmpty ? .off : .remote)
+        modelRepo = try c.decode(forKey: .modelRepo, default: d.modelRepo)
+        modelRevision = try c.decode(forKey: .modelRevision, default: d.modelRevision)
+        modelManifestSHA256 = try c.decode(forKey: .modelManifestSHA256, default: d.modelManifestSHA256)
+        computeUnit = try c.decode(forKey: .computeUnit, default: d.computeUnit)
+        dimension = try c.decode(forKey: .dimension, default: d.dimension)
     }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(mode, forKey: .mode)
+        try c.encode(modelRepo, forKey: .modelRepo)
+        try c.encode(modelRevision, forKey: .modelRevision)
+        try c.encode(modelManifestSHA256, forKey: .modelManifestSHA256)
+        try c.encode(computeUnit, forKey: .computeUnit)
+        try c.encode(dimension, forKey: .dimension)
         try c.encode(useChatServer, forKey: .useChatServer)
         try c.encode(baseURL, forKey: .baseURL)
         if !encoder.excludesSecrets {
@@ -138,11 +183,13 @@ public struct RetrievalSettings: Codable, Equatable, Sendable {
     public var topK = 5
     /// 하이브리드 검색에서 임베딩 점수의 비중 (0이면 BM25만, 1이면 임베딩만).
     public var embeddingWeight = 0.5
+    /// 텍스트 없는 PDF 페이지를 OCR할 때 쓸 언어 (비어 있으면 자동 감지).
+    public var ocrLanguages = ["ko-KR", "en-US"]
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case chunkSize, chunkOverlap, topK, embeddingWeight
+        case chunkSize, chunkOverlap, topK, embeddingWeight, ocrLanguages
     }
 
     public init(from decoder: Decoder) throws {
@@ -152,6 +199,7 @@ public struct RetrievalSettings: Codable, Equatable, Sendable {
         chunkOverlap = try c.decode(forKey: .chunkOverlap, default: d.chunkOverlap)
         topK = try c.decode(forKey: .topK, default: d.topK)
         embeddingWeight = try c.decode(forKey: .embeddingWeight, default: d.embeddingWeight)
+        ocrLanguages = try c.decode(forKey: .ocrLanguages, default: d.ocrLanguages)
     }
 }
 

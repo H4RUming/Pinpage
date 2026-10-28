@@ -44,6 +44,7 @@ struct EmbeddingsRequest: Encodable {
 struct EmbeddingsResponse: Decodable {
     struct Item: Decodable {
         let embedding: [Double]
+        let index: Int?
     }
     let data: [Item]
 }

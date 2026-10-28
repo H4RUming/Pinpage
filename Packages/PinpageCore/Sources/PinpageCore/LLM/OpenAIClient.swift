@@ -81,6 +81,17 @@ public struct OpenAIClient: Sendable {
         return ConnectionTestResult(latencyMs: result.latencyMs, attempts: result.attempts, embeddingDimension: dimension)
     }
 
+    /// 문장들의 임베딩 (`POST /v1/embeddings`). L2 정규화해서 입력 순서대로 돌려준다.
+    public func embeddings(model: String, inputs: [String]) async throws -> [[Float]] {
+        guard !model.isEmpty else { throw failure(.modelNotSelected, attempts: 0) }
+        guard !inputs.isEmpty else { return [] }
+        let result: Sent<EmbeddingsResponse> = try await send(.embeddings, model: model, method: "POST", path: "embeddings",
+                                                             body: EmbeddingsRequest(model: model, input: inputs))
+        let items = result.value.data.enumerated().sorted { ($0.element.index ?? $0.offset) < ($1.element.index ?? $1.offset) }
+        guard items.count == inputs.count else { throw failure(.invalidResponse, attempts: result.attempts) }
+        return items.map { VectorMath.normalized($0.element.embedding.map(Float.init)) }
+    }
+
     // MARK: - 요청과 재시도
 
     struct Sent<Value> {

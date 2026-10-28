@@ -6,6 +6,7 @@ private func sampleSettings() -> AppSettings {
     var s = AppSettings()
     s.chat = EndpointSettings(baseURL: "http://gpu-server:8000", apiKey: "sk-chat-secret", model: "qwen3-8b")
     s.embedding = EmbeddingSettings(useChatServer: false, baseURL: "http://100.100.10.20:8001", apiKey: "sk-embed-secret", model: "bge-m3")
+    s.embedding.mode = .remote
     s.network.maxRetries = 4
     s.network.requestTimeoutSeconds = 180
     s.retrieval.topK = 8
@@ -66,6 +67,48 @@ struct AppSettingsTests {
         #expect(separate.apiKey == "sk-embed-secret")
     }
 
+    @Test("mode가 없던 이전 설정 파일은 원격 모델 지정 여부로 방식을 정한다")
+    func legacyEmbeddingMode() throws {
+        let remote = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"embedding":{"model":"bge-m3"}}"#.utf8))
+        #expect(remote.embedding.mode == .remote)
+        let off = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"embedding":{"model":""}}"#.utf8))
+        #expect(off.embedding.mode == .off)
+        #expect(off.embedding.computeUnit == .gpu)
+        #expect(off.embedding.dimension == 768)
+    }
+
+    @Test("앱 내장 임베딩 설정 검증")
+    func builtinValidation() {
+        var s = AppSettings()
+        s.embedding.mode = .builtin
+        #expect(Set(s.validate().map(\.field)) == ["임베딩 모델 저장소", "임베딩 모델 버전", "임베딩 모델 검증값"])
+        s.embedding.modelRepo = "H4RUming/embeddinggemma-2-coreml-text"
+        s.embedding.modelRevision = "abdbb538c8013f897003dfc8861a012480d5e584"
+        s.embedding.modelManifestSHA256 = String(repeating: "a", count: 64)
+        #expect(s.validate().isEmpty)
+        s.embedding.dimension = 300
+        #expect(s.validate().map(\.field) == ["임베딩 차원"])
+    }
+
+    @Test("색인 식별값은 모델, 연산 장치, 차원, 프롬프트가 바뀌면 달라진다")
+    func embedderKey() {
+        let prompts = EmbeddingPrompts(query: "q: {text}", document: "d: {text}")
+        var s = AppSettings()
+        #expect(s.embedderKey(prompts: prompts) == nil)
+        s.embedding.mode = .builtin
+        s.embedding.modelRepo = "a/b"
+        s.embedding.modelRevision = "r1"
+        let base = s.embedderKey(prompts: prompts)
+        #expect(base != nil)
+        var other = s; other.embedding.computeUnit = .neuralEngine
+        #expect(other.embedderKey(prompts: prompts) != base)
+        other = s; other.embedding.dimension = 256
+        #expect(other.embedderKey(prompts: prompts) != base)
+        other = s; other.embedding.modelRevision = "r2"
+        #expect(other.embedderKey(prompts: prompts) != base)
+        #expect(s.embedderKey(prompts: EmbeddingPrompts(query: "x {text}", document: "d: {text}")) != base)
+    }
+
     @Test("임베딩 모델이 없으면 BM25만 사용")
     func embeddingConfigured() {
         var s = sampleSettings()
@@ -84,6 +127,21 @@ struct SettingsTransferTests {
         #expect(!text.contains("sk-chat-secret"))
         #expect(!text.contains("sk-embed-secret"))
         #expect(!text.contains("apiKey"))
+    }
+
+    @Test("앱 내장 임베딩 설정도 내보내고 불러온다")
+    func exportBuiltinEmbedding() throws {
+        var original = sampleSettings()
+        original.embedding.mode = .builtin
+        original.embedding.modelRepo = "H4RUming/embeddinggemma-2-coreml-text"
+        original.embedding.modelRevision = "abdbb538c8013f897003dfc8861a012480d5e584"
+        original.embedding.modelManifestSHA256 = "f1c2ccaff197ef4735f1676f1efe0347fc7520c85476aa2749e8ee3a03ec554c"
+        original.embedding.computeUnit = .neuralEngine
+        original.embedding.dimension = 512
+        original.retrieval.ocrLanguages = ["ko-KR"]
+        let data = try SettingsTransfer.exportData(original, appVersion: "0.1.0")
+        let imported = try SettingsTransfer.importSettings(from: data, keepingSecretsFrom: original)
+        #expect(imported == original)
     }
 
     @Test("내보낸 파일의 머리 정보")

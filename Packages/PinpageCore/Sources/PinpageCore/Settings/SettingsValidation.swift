@@ -11,6 +11,7 @@ public enum SettingsLimits {
     public static let embeddingWeight = 0.0...1.0
     public static let quizPassThreshold = 0.0...1.0
     public static let hintLevels = 1...5
+    public static let embeddingDimensions = [768, 512, 256, 128]
 }
 
 public struct SettingsIssue: Equatable, Sendable {
@@ -47,8 +48,22 @@ extension AppSettings {
         }
 
         checkURL(chat.baseURL, field: "Chat API 주소")
-        if !embedding.useChatServer {
+        if embedding.mode == .remote && !embedding.useChatServer {
             checkURL(embedding.baseURL, field: "임베딩 API 주소")
+        }
+        if embedding.mode == .builtin {
+            if embedding.modelRepo.split(separator: "/").count != 2 {
+                issues.append(SettingsIssue(field: "임베딩 모델 저장소", message: "'사용자/저장소' 형식이어야 합니다."))
+            }
+            if embedding.modelRevision.range(of: "^[0-9a-f]{40}$", options: .regularExpression) == nil {
+                issues.append(SettingsIssue(field: "임베딩 모델 버전", message: "40자리 커밋 해시여야 합니다."))
+            }
+            if embedding.modelManifestSHA256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) == nil {
+                issues.append(SettingsIssue(field: "임베딩 모델 검증값", message: "64자리 SHA-256이어야 합니다."))
+            }
+            if !SettingsLimits.embeddingDimensions.contains(embedding.dimension) {
+                issues.append(SettingsIssue(field: "임베딩 차원", message: "768, 512, 256, 128 중 하나여야 합니다."))
+            }
         }
 
         checkRange(network.testTimeoutSeconds, SettingsLimits.testTimeoutSeconds, field: "연결 테스트 시간 제한(초)")
@@ -82,8 +97,25 @@ extension AppSettings {
         return try APIEndpoint(baseURL: embedding.baseURL, apiKey: embedding.apiKey)
     }
 
-    /// 임베딩 검색을 쓸 수 있는지. false면 BM25만으로 검색한다.
+    /// 임베딩 검색을 쓰도록 설정했는지. false면 BM25만으로 검색한다.
     public var isEmbeddingConfigured: Bool {
-        !embedding.model.isEmpty && (try? embeddingEndpoint()) != nil
+        switch embedding.mode {
+        case .off: false
+        case .builtin: true
+        case .remote: !embedding.model.isEmpty && (try? embeddingEndpoint()) != nil
+        }
+    }
+
+    /// 이 설정으로 만든 벡터의 식별값. 바뀌면 다시 색인해야 한다. 임베딩을 쓰지 않으면 nil.
+    public func embedderKey(prompts: EmbeddingPrompts) -> String? {
+        switch embedding.mode {
+        case .off:
+            return nil
+        case .builtin:
+            return "builtin:\(embedding.modelRepo)@\(embedding.modelRevision)|\(embedding.computeUnit.rawValue)|\(embedding.dimension)|\(prompts.fingerprint)"
+        case .remote:
+            guard let endpoint = try? embeddingEndpoint(), !embedding.model.isEmpty else { return nil }
+            return "remote:\(endpoint.baseURL.absoluteString)|\(embedding.model)|\(prompts.fingerprint)"
+        }
     }
 }

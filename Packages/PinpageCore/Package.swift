@@ -7,8 +7,18 @@ let package = Package(
     products: [
         .library(name: "PinpageCore", targets: ["PinpageCore"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/groue/GRDB.swift.git", exact: "7.11.1"),
+    ],
     targets: [
-        .target(name: "PinpageCore"),
-        .testTarget(name: "PinpageCoreTests", dependencies: ["PinpageCore"]),
+        .target(
+            name: "PinpageCore",
+            dependencies: [.product(name: "GRDB", package: "GRDB.swift")]
+        ),
+        .testTarget(
+            name: "PinpageCoreTests",
+            dependencies: ["PinpageCore"],
+            resources: [.copy("Resources")]
+        ),
     ]
 )
