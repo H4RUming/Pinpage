@@ -5,7 +5,7 @@
 
 ## 개발 환경
 
-- Apple Silicon Mac, macOS 14 이상, Xcode 16 이상 (Swift 6)
+- Apple Silicon Mac, macOS 15 이상, Xcode 16 이상 (Swift 6)
 - XcodeGen: `brew install xcodegen`
 
 ```bash

@@ -3,7 +3,7 @@ name: Pinpage
 options:
   bundleIdPrefix: app.pinpage
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "15.0"
   developmentLanguage: ko
   createIntermediateGroups: true
 
