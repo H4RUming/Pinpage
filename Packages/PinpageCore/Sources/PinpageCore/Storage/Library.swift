@@ -95,7 +95,7 @@ public struct Library: Sendable {
         let document = Document(
             id: id, setId: setId, kind: .pdf, fileName: source.lastPathComponent, storedPath: storedPath,
             sha256: sha, pageCount: pdf.pageCount, status: .pending, errorMessage: nil,
-            ocrPageCount: 0, ocrSystemVersion: nil, indexedChunkSize: nil, indexedChunkOverlap: nil,
+            ocrPageCount: 0, ocrSystemVersion: nil, indexedChunkSize: nil, indexedChunkOverlap: nil, indexedMinChunkLength: nil,
             indexedEmbedderKey: nil, indexedAt: nil, importedAt: Date()
         )
 
@@ -115,6 +115,17 @@ public struct Library: Sendable {
             throw error
         }
         return document
+    }
+
+    /// 색인 도중 앱이 종료돼 "색인 중"으로 남은 문서를 "색인 대기"로 되돌린다. 앱을 켤 때 부른다.
+    /// 앞서 만든 청크는 다음 색인 때 지우고 새로 만든다.
+    @discardableResult
+    public func resetInterruptedIndexing() throws -> Int {
+        try database.writer.write { db in
+            try Document
+                .filter(Column("status") == DocumentStatus.indexing.rawValue)
+                .updateAll(db, Column("status").set(to: DocumentStatus.pending.rawValue))
+        }
     }
 
     public func deleteDocument(id: String) throws {

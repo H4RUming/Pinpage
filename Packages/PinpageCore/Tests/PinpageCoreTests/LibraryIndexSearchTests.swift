@@ -22,7 +22,7 @@ struct FakeEmbedder: Embedder {
 }
 
 private let prompts = EmbeddingPrompts(query: "task: search result | query: {text}", document: "title: {title} | text: {text}")
-private let options = IndexingOptions(chunkSize: 300, chunkOverlap: 50, ocrLanguages: ["ko-KR", "en-US"], prompts: prompts)
+private let options = IndexingOptions(chunkSize: 300, chunkOverlap: 50, minChunkLength: 30, ocrLanguages: ["ko-KR", "en-US"], prompts: prompts)
 
 private func makeLibrary() throws -> Library {
     let root = FileManager.default.temporaryDirectory.appending(path: "pinpage-lib-\(UUID().uuidString)")
@@ -87,6 +87,19 @@ struct LibraryTests {
         }
     }
 
+    @Test("색인 도중 종료돼 남은 '색인 중' 문서를 '색인 대기'로 되돌린다")
+    func resetInterrupted() throws {
+        let library = try makeLibrary()
+        let set = try library.createSet(name: "s")
+        let document = try library.importPDF(from: try TestPDF.make(pages: [["내용"]]), into: set.id)
+        try library.database.writer.write { db in
+            try db.execute(sql: "UPDATE document SET status = 'indexing' WHERE id = ?", arguments: [document.id])
+        }
+        #expect(try library.resetInterruptedIndexing() == 1)
+        #expect(try library.document(id: document.id)?.status == .pending)
+        #expect(try library.resetInterruptedIndexing() == 0)
+    }
+
     @Test("파일 DB는 WAL 모드로 연다")
     func walMode() throws {
         let url = FileManager.default.temporaryDirectory.appending(path: "pinpage-\(UUID().uuidString)/pinpage.sqlite")
@@ -126,6 +139,13 @@ struct IndexAndSearchTests {
         #expect(!DocumentIndexer.isUpToDate(indexed, options: options, embedderKey: "other"))
         var changed = options; changed.chunkSize = 500
         #expect(!DocumentIndexer.isUpToDate(indexed, options: changed, embedderKey: "fake-v1"))
+        changed = options; changed.minChunkLength = 10
+        #expect(!DocumentIndexer.isUpToDate(indexed, options: changed, embedderKey: "fake-v1"))
+        // 문단 단위 청크: 2쪽의 두 문단이 따로 청크가 된다.
+        let page2Chunks = try await library.database.writer.read { db in
+            try Chunk.filter(Column("pageIndex") == 1).order(Column("ordinal")).fetchAll(db)
+        }
+        #expect(page2Chunks.map(\.paragraphStart) == [0, 1])
         #expect(phases.sawReading && phases.sawEmbedding)
 
         let chunks = try await library.database.writer.read { db in try Chunk.fetchAll(db) }
@@ -183,7 +203,7 @@ struct IndexAndSearchTests {
         let first = try library.documents(inSet: set.id)[0].chunkCount
         _ = try await search.search(setId: set.id, query: "경쟁", topK: 50, embedder: nil, prompts: nil, embeddingWeight: 0)
 
-        var bigger = options; bigger.chunkSize = 2000; bigger.chunkOverlap = 0
+        var bigger = options; bigger.chunkSize = 2000; bigger.chunkOverlap = 0; bigger.minChunkLength = 0
         try await indexer.index(documentId: document.id, options: bigger, embedder: nil)
         let second = try library.documents(inSet: set.id)[0].chunkCount
         #expect(first > second)

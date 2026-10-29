@@ -30,7 +30,7 @@ struct PDFIngestTests {
             #expect(paragraphs.count == expected.count, "\(pageIndex + 1)쪽 문단 수")
 
             // 문단마다 하나씩 청크가 되도록 작은 크기로 자른다.
-            let drafts = Chunker.chunks(page: content, paragraphs: paragraphs, size: 60, overlap: 10)
+            let drafts = Chunker.chunks(page: content, paragraphs: paragraphs, size: 60, overlap: 10, minLength: 0)
             #expect(!drafts.isEmpty)
             let pageText = content.text as NSString
             for draft in drafts {
@@ -51,19 +51,18 @@ struct PDFIngestTests {
         }
     }
 
-    @Test("짧은 문단은 청크 크기까지 합친다")
-    func mergesParagraphs() throws {
-        let url = try TestPDF.make(pages: [page1])
+    @Test("문단마다 청크 하나, 짧은 문단(제목)은 다음 문단과 합친다")
+    func paragraphChunks() throws {
+        let url = try TestPDF.make(pages: [["1장 자료형"] + page1])
         defer { try? FileManager.default.removeItem(at: url) }
         let page = try #require(PDFDocument(url: url)?.page(at: 0))
         let content = PDFExtractor.textContent(of: page, index: 0)
         let paragraphs = ParagraphSegmenter.paragraphs(from: content.lines)
-        let drafts = Chunker.chunks(page: content, paragraphs: paragraphs, size: 800, overlap: 100)
-        #expect(drafts.count == 1)
-        #expect(drafts[0].paragraphStart == 0)
-        #expect(drafts[0].paragraphEnd == paragraphs.count - 1)
-        #expect(drafts[0].text.contains("튜플은"))
-        #expect(drafts[0].text.contains("딕셔너리는"))
+        #expect(paragraphs.count == 4)
+        let drafts = Chunker.chunks(page: content, paragraphs: paragraphs, size: 800, overlap: 100, minLength: 30)
+        #expect(drafts.map { [$0.paragraphStart, $0.paragraphEnd] } == [[0, 1], [2, 2], [3, 3]])
+        #expect(drafts[0].text.hasPrefix("1장 자료형\n파이썬의 리스트는"))
+        #expect(drafts[1].text.hasPrefix("튜플은"))
     }
 
     @Test("텍스트 없는 페이지는 OCR로 읽고 위치를 가진다")
@@ -86,7 +85,8 @@ struct PDFIngestTests {
 
         let paragraphs = ParagraphSegmenter.paragraphs(from: content.lines)
         #expect(paragraphs.count == 2)
-        let drafts = Chunker.chunks(page: content, paragraphs: paragraphs, size: 800, overlap: 100)
+        let drafts = Chunker.chunks(page: content, paragraphs: paragraphs, size: 800, overlap: 100, minLength: 30)
+        #expect(drafts.count == 2)
         #expect(drafts.allSatisfy { $0.pageIndex == 1 && !$0.rects.isEmpty })
     }
 }
@@ -173,12 +173,38 @@ struct ChunkerTests {
         let lines = [TextLine(text: body, rect: CGRect(x: 0, y: 0, width: 10, height: 10), range: NSRange(location: 0, length: ns.length))]
         let page = PageContent(pageIndex: 3, text: body, lines: lines, source: .text)
         let paragraphs = ParagraphSegmenter.paragraphs(from: lines)
-        let drafts = Chunker.chunks(page: page, paragraphs: paragraphs, size: 150, overlap: 30)
+        let drafts = Chunker.chunks(page: page, paragraphs: paragraphs, size: 150, overlap: 30, minLength: 30)
         #expect(drafts.count > 1)
         for d in drafts {
             #expect(d.pageIndex == 3 && d.paragraphStart == 0 && d.paragraphEnd == 0)
             #expect(Chunker.clean(ns.substring(with: d.range)) == d.text)
         }
+    }
+
+    private func para(_ index: Int, _ text: String, at location: Int) -> (Paragraph, String) {
+        let length = (text as NSString).length
+        let line = TextLine(text: text, rect: CGRect(x: 0, y: CGFloat(700 - index * 30), width: 100, height: 12),
+                            range: NSRange(location: location, length: length))
+        return (Paragraph(index: index, lines: [line], range: line.range), text)
+    }
+
+    @Test("페이지 끝에 남은 짧은 문단은 앞 청크에 붙이고, 짧은 문단이 이어지면 기준까지 합친다")
+    func shortParagraphs() {
+        let texts = ["가나다라마바사아자차카타파하 가나다라마바사", "짧음", "끝"]
+        var location = 0
+        var paragraphs: [Paragraph] = []
+        for (i, t) in texts.enumerated() {
+            paragraphs.append(para(i, t, at: location).0)
+            location += (t as NSString).length + 1
+        }
+        let page = PageContent(pageIndex: 0, text: texts.joined(separator: "\n"), lines: paragraphs.flatMap(\.lines), source: .text)
+        let drafts = Chunker.chunks(page: page, paragraphs: paragraphs, size: 800, overlap: 100, minLength: 10)
+        #expect(drafts.count == 1)
+        #expect(drafts[0].paragraphStart == 0 && drafts[0].paragraphEnd == 2)
+
+        // 기준 0이면 문단마다 청크
+        let each = Chunker.chunks(page: page, paragraphs: paragraphs, size: 800, overlap: 100, minLength: 0)
+        #expect(each.map(\.paragraphStart) == [0, 1, 2])
     }
 
     @Test("공백 정리")

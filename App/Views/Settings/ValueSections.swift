@@ -23,6 +23,8 @@ struct ValueSections: View {
                          range: SettingsLimits.chunkSize, step: 100, unit: "글자")
                 IntField(title: "청크 겹침", value: $model.settings.retrieval.chunkOverlap,
                          range: SettingsLimits.chunkOverlap, step: 50, unit: "글자")
+                IntField(title: "짧은 문단 합치기 기준", value: $model.settings.retrieval.minChunkLength,
+                         range: SettingsLimits.minChunkLength, step: 10, unit: "글자")
                 IntField(title: "검색 결과 개수", value: $model.settings.retrieval.topK,
                          range: SettingsLimits.topK, unit: "개")
                 LabeledContent("임베딩 검색 비중") {
@@ -37,7 +39,7 @@ struct ValueSections: View {
             } header: {
                 Text("검색")
             } footer: {
-                Text("임베딩 검색 비중이 0이면 키워드 검색(BM25)만, 1이면 임베딩 검색만 사용합니다.")
+                Text("문단 하나가 청크 하나가 됩니다. 청크 크기보다 긴 문단은 겹침만큼 겹치게 자르고, 합치기 기준보다 짧은 문단(제목 등)은 다음 문단과 합칩니다. 임베딩 검색 비중이 0이면 키워드 검색(BM25)만, 1이면 임베딩 검색만 사용합니다. 이 값들이 바뀌면 학습 세트를 다시 색인해야 합니다.")
             }
 
             Section("학습") {

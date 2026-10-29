@@ -24,8 +24,12 @@ project.yml                 XcodeGen 프로젝트 정의 (ATS 예외, 샌드박�
 Packages/PinpageCore/       UI 없는 핵심 로직과 테스트
   Settings/                 설정 모델, 검증, 저장, 내보내기·불러오기
   LLM/                      주소 정규화, OpenAI 호환 클라이언트, 재시도, 한국어 오류 메시지
-App/                        SwiftUI 앱 (설정 탭 등 화면)
-Tools/mock_openai_server.py 개발용 가짜 OpenAI 호환 서버
+  Storage/                  DB(GRDB), 학습 세트·문서·청크·임베딩, 자료 파일 관리
+  Ingest/                   PDF 텍스트·OCR 추출, 문단 나누기, 청크 나누기, 색인
+  Search/                   BM25(한글 음절 바이그램), 하이브리드 검색
+  Embedding/                Gemma 토크나이저, Core ML·원격 임베더, 모델 설치
+App/                        SwiftUI 앱 (학습 세트, 설정 화면)
+Tools/                      가짜 OpenAI 서버, 임베딩 모델 준비·검증 스크립트
 ```
 
 ## 데이터 위치
@@ -33,6 +37,19 @@ Tools/mock_openai_server.py 개발용 가짜 OpenAI 호환 서버
 `~/Library/Application Support/Pinpage/`
 
 - `settings.json`: 설정 (API 키 포함, 권한 600). 설정 내보내기 파일에는 API 키가 들어가지 않습니다.
+  처음 실행하면 앱에 들어 있는 `App/Resources/DefaultSettings.json`(임베딩 모델 저장소·고정 버전 등)으로 시작합니다.
+- `pinpage.sqlite`: 학습 세트, 문서, 청크(페이지·문단·위치), 임베딩 (WAL 모드)
+- `sets/`: 학습 세트에 넣은 자료 파일 사본
+- `models/`: 처음 설정할 때 내려받은 임베딩 모델 (Hugging Face 고정 버전, SHA-256 검증)
+
+## 임베딩 모델
+
+- 앱 내장 임베딩은 `google/embeddinggemma-2`의 Core ML 변환본을 씁니다. 검증 결과는 [docs/embedding-spike.md](docs/embedding-spike.md).
+- 앱은 처음 설정할 때 Hugging Face(`H4RUming/embeddinggemma-2-coreml-text`, 고정 버전)에서 모델을 내려받습니다.
+  인터넷이 없으면 설정 탭의 [폴더에서 설치…]로 같은 폴더를 설치할 수 있습니다.
+- 업로드 폴더 만들기: `python3 Tools/prepare_embedding_model.py dist/embedding-model`
+- 임베딩 프롬프트는 `App/Resources/embedding-prompts.json`에 있습니다 (코드에 넣지 않음).
+- 모델이 필요한 테스트는 `dist/embedding-model`(또는 `PINPAGE_EMBEDDING_MODEL_DIR`)이 있을 때만 돕니다.
 
 ## LLM 서버 주소
 

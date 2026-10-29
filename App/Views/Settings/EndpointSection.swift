@@ -33,7 +33,7 @@ struct EndpointSection: View {
             case .chat:
                 Text("API 키는 이 Mac에만 저장되며 설정 내보내기 파일에는 포함되지 않습니다. 로컬·Tailscale 서버처럼 키가 필요 없으면 비워두세요.")
             case .embedding:
-                Text("임베딩 모델을 고르지 않으면 키워드 검색(BM25)만 사용합니다.")
+                Text("OpenAI 호환 /v1/embeddings를 제공하는 서버여야 합니다.")
             }
         }
         .onChange(of: baseURL.wrappedValue) { model.serverInputChanged(role) }
@@ -103,7 +103,7 @@ private struct ModelPickerRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Picker("모델", selection: $selection) {
-                    Text(role == .chat ? "선택하세요" : "사용 안 함 (키워드 검색만)").tag("")
+                    Text("선택하세요").tag("")
                     ForEach(state.models, id: \.self) { name in
                         Text(name).tag(name)
                     }

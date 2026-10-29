@@ -3,7 +3,7 @@ import Foundation
 
 /// 임베딩 모델이 필요한 테스트용 도우미.
 /// 모델 폴더: 환경 변수 PINPAGE_EMBEDDING_MODEL_DIR, 없으면 저장소의 dist/embedding-model.
-/// 폴더가 없으면 해당 테스트는 건너뛴다 (`make model-dist`로 만든다).
+/// 폴더가 없으면 해당 테스트는 건너뛴다 (`python3 Tools/prepare_embedding_model.py dist/embedding-model`로 만든다).
 enum EmbeddingModelFixture {
     static let modelDirectory: URL? = {
         if let path = ProcessInfo.processInfo.environment["PINPAGE_EMBEDDING_MODEL_DIR"] {

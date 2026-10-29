@@ -7,6 +7,7 @@ public enum SettingsLimits {
     public static let maxRetries = 0...10
     public static let chunkSize = 100...8000
     public static let chunkOverlap = 0...2000
+    public static let minChunkLength = 0...1000
     public static let topK = 1...50
     public static let embeddingWeight = 0.0...1.0
     public static let quizPassThreshold = 0.0...1.0
@@ -74,6 +75,10 @@ extension AppSettings {
         checkRange(retrieval.chunkOverlap, SettingsLimits.chunkOverlap, field: "청크 겹침")
         if retrieval.chunkOverlap >= retrieval.chunkSize {
             issues.append(SettingsIssue(field: "청크 겹침", message: "청크 크기(\(retrieval.chunkSize))보다 작아야 합니다."))
+        }
+        checkRange(retrieval.minChunkLength, SettingsLimits.minChunkLength, field: "짧은 문단 합치기 기준")
+        if retrieval.minChunkLength >= retrieval.chunkSize {
+            issues.append(SettingsIssue(field: "짧은 문단 합치기 기준", message: "청크 크기(\(retrieval.chunkSize))보다 작아야 합니다."))
         }
         checkRange(retrieval.topK, SettingsLimits.topK, field: "검색 결과 개수")
         checkRange(retrieval.embeddingWeight, SettingsLimits.embeddingWeight, field: "임베딩 검색 비중")

@@ -84,6 +84,12 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        migrator.registerMigration("v2: 짧은 문단 합치기 기준 기록") { db in
+            try db.alter(table: "document") { t in
+                t.add(column: "indexedMinChunkLength", .integer)
+            }
+        }
+
         return migrator
     }
 }

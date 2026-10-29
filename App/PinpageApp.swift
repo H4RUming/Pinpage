@@ -8,7 +8,7 @@ struct PinpageApp: App {
         WindowGroup("Pinpage") {
             RootView()
                 .environment(model)
-                .frame(minWidth: 820, minHeight: 560)
+                .frame(minWidth: 900, minHeight: 620)
         }
         .windowToolbarStyle(.unified)
     }

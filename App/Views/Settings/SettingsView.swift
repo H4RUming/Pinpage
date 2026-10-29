@@ -35,7 +35,10 @@ struct SettingsView: View {
             }
 
             EndpointSection(role: .chat)
-            EndpointSection(role: .embedding)
+            EmbeddingModeSection()
+            if model.settings.embedding.mode == .remote {
+                EndpointSection(role: .embedding)
+            }
             ValueSections()
             SettingsFileSection()
         }

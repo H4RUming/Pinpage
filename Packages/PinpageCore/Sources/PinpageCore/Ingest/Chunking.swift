@@ -89,35 +89,43 @@ public struct ChunkDraft: Equatable, Sendable {
     public var text: String
 }
 
-/// 문단을 청크로 묶는다. 청크는 페이지를 넘지 않는다.
-/// - 짧은 문단은 `size`까지 이어 붙인다
+/// 문단 단위로 청크를 만든다. 청크는 페이지를 넘지 않는다.
+/// - 문단 하나가 청크 하나 (근거 위치를 "N쪽 M번째 문단"으로 짚을 수 있도록)
+/// - `minLength`보다 짧은 문단(제목 등)은 다음 문단과 합친다. 페이지 끝에 남으면 앞 청크에 붙인다
 /// - `size`보다 긴 문단은 `overlap`만큼 겹치게 자른다 (가능하면 문장 끝이나 공백에서)
 /// 길이는 UTF-16 단위로 잰다.
 public enum Chunker {
-    public static func chunks(page: PageContent, paragraphs: [Paragraph], size: Int, overlap: Int) -> [ChunkDraft] {
-        precondition(size > 0 && overlap >= 0 && overlap < size)
+    public static func chunks(page: PageContent, paragraphs: [Paragraph], size: Int, overlap: Int, minLength: Int) -> [ChunkDraft] {
+        precondition(size > 0 && overlap >= 0 && overlap < size && minLength >= 0)
         let pageText = page.text as NSString
         var drafts: [ChunkDraft] = []
-        var buffer: [Paragraph] = []
-        var bufferLength = 0
+        /// 마지막 청크가 문단을 합친 것이라 뒤에 더 붙일 수 있는지 (긴 문단을 자른 조각이면 false)
+        var lastIsWhole = false
+        var group: [Paragraph] = []
 
-        func flush() {
-            guard !buffer.isEmpty else { return }
-            let first = buffer[0], last = buffer[buffer.count - 1]
+        func groupLength(_ g: [Paragraph]) -> Int {
+            g.isEmpty ? 0 : NSMaxRange(g[g.count - 1].range) - g[0].range.location
+        }
+
+        func draft(of g: [Paragraph]) -> ChunkDraft {
+            let first = g[0], last = g[g.count - 1]
             let range = NSRange(location: first.range.location, length: NSMaxRange(last.range) - first.range.location)
-            let text = buffer.map { clean(pageText.substring(with: $0.range)) }.joined(separator: "\n")
-            drafts.append(ChunkDraft(
-                pageIndex: page.pageIndex, paragraphStart: first.index, paragraphEnd: last.index,
-                range: range, rects: buffer.flatMap { $0.lines.map(\.rect) }, text: text
-            ))
-            buffer = []
-            bufferLength = 0
+            let text = g.map { clean(pageText.substring(with: $0.range)) }.joined(separator: "\n")
+            return ChunkDraft(pageIndex: page.pageIndex, paragraphStart: first.index, paragraphEnd: last.index,
+                              range: range, rects: g.flatMap { $0.lines.map(\.rect) }, text: text)
+        }
+
+        func emitGroup() {
+            guard !group.isEmpty else { return }
+            drafts.append(draft(of: group))
+            lastIsWhole = true
+            group = []
         }
 
         for paragraph in paragraphs {
-            let length = paragraph.range.length
-            if length > size {
-                flush()
+            if paragraph.range.length > size {
+                // 앞에 쌓인 짧은 문단은 따로 내보낸다.
+                emitGroup()
                 for window in windows(of: paragraph.range, in: pageText, size: size, overlap: overlap) {
                     let text = clean(pageText.substring(with: window))
                     guard !text.isEmpty else { continue }
@@ -127,14 +135,36 @@ public enum Chunker {
                         range: window, rects: rects, text: text
                     ))
                 }
+                lastIsWhole = false
                 continue
             }
-            let separator = buffer.isEmpty ? 0 : 1
-            if bufferLength + separator + length > size { flush() }
-            bufferLength += (buffer.isEmpty ? 0 : 1) + length
-            buffer.append(paragraph)
+            if !group.isEmpty, groupLength(group + [paragraph]) > size {
+                emitGroup()
+            }
+            group.append(paragraph)
+            if groupLength(group) >= minLength {
+                emitGroup()
+            }
         }
-        flush()
+
+        // 페이지 끝에 남은 짧은 문단: 앞 청크에 붙일 수 있으면 붙인다.
+        if !group.isEmpty {
+            if lastIsWhole, let previous = drafts.last,
+               NSMaxRange(group[group.count - 1].range) - previous.range.location <= size {
+                let merged = ChunkDraft(
+                    pageIndex: page.pageIndex, paragraphStart: previous.paragraphStart,
+                    paragraphEnd: group[group.count - 1].index,
+                    range: NSRange(location: previous.range.location,
+                                   length: NSMaxRange(group[group.count - 1].range) - previous.range.location),
+                    rects: previous.rects + group.flatMap { $0.lines.map(\.rect) },
+                    text: ([previous.text] + group.map { clean(pageText.substring(with: $0.range)) }).joined(separator: "\n")
+                )
+                drafts[drafts.count - 1] = merged
+                group = []
+            } else {
+                emitGroup()
+            }
+        }
         return drafts.filter { !$0.text.isEmpty }
     }
 

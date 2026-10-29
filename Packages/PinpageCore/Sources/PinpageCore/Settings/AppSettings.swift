@@ -175,10 +175,12 @@ public struct NetworkSettings: Codable, Equatable, Sendable {
 }
 
 public struct RetrievalSettings: Codable, Equatable, Sendable {
-    /// 청크 최대 길이(글자 수).
+    /// 청크 최대 길이(글자 수). 이보다 긴 문단은 잘라서 여러 청크로 만든다.
     public var chunkSize = 800
-    /// 이웃 청크와 겹치는 길이(글자 수).
+    /// 긴 문단을 자를 때 이웃 청크와 겹치는 길이(글자 수).
     public var chunkOverlap = 100
+    /// 이보다 짧은 문단(제목 등)은 다음 문단과 합친다(글자 수).
+    public var minChunkLength = 80
     /// 검색 결과로 가져올 청크 개수.
     public var topK = 5
     /// 하이브리드 검색에서 임베딩 점수의 비중 (0이면 BM25만, 1이면 임베딩만).
@@ -189,7 +191,7 @@ public struct RetrievalSettings: Codable, Equatable, Sendable {
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case chunkSize, chunkOverlap, topK, embeddingWeight, ocrLanguages
+        case chunkSize, chunkOverlap, minChunkLength, topK, embeddingWeight, ocrLanguages
     }
 
     public init(from decoder: Decoder) throws {
@@ -197,6 +199,7 @@ public struct RetrievalSettings: Codable, Equatable, Sendable {
         let d = RetrievalSettings()
         chunkSize = try c.decode(forKey: .chunkSize, default: d.chunkSize)
         chunkOverlap = try c.decode(forKey: .chunkOverlap, default: d.chunkOverlap)
+        minChunkLength = try c.decode(forKey: .minChunkLength, default: d.minChunkLength)
         topK = try c.decode(forKey: .topK, default: d.topK)
         embeddingWeight = try c.decode(forKey: .embeddingWeight, default: d.embeddingWeight)
         ocrLanguages = try c.decode(forKey: .ocrLanguages, default: d.ocrLanguages)

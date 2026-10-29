@@ -6,12 +6,14 @@ import PDFKit
 public struct IndexingOptions: Equatable, Sendable {
     public var chunkSize: Int
     public var chunkOverlap: Int
+    public var minChunkLength: Int
     public var ocrLanguages: [String]
     public var prompts: EmbeddingPrompts?
 
-    public init(chunkSize: Int, chunkOverlap: Int, ocrLanguages: [String], prompts: EmbeddingPrompts?) {
+    public init(chunkSize: Int, chunkOverlap: Int, minChunkLength: Int, ocrLanguages: [String], prompts: EmbeddingPrompts?) {
         self.chunkSize = chunkSize
         self.chunkOverlap = chunkOverlap
+        self.minChunkLength = minChunkLength
         self.ocrLanguages = ocrLanguages
         self.prompts = prompts
     }
@@ -41,6 +43,7 @@ public struct DocumentIndexer: Sendable {
         document.status == .indexed
             && document.indexedChunkSize == options.chunkSize
             && document.indexedChunkOverlap == options.chunkOverlap
+            && document.indexedMinChunkLength == options.minChunkLength
             && document.indexedEmbedderKey == embedderKey
     }
 
@@ -78,7 +81,8 @@ public struct DocumentIndexer: Sendable {
         for content in pageContents {
             let paragraphs = ParagraphSegmenter.paragraphs(from: content.lines)
             let pageDrafts = Chunker.chunks(page: content, paragraphs: paragraphs,
-                                            size: options.chunkSize, overlap: options.chunkOverlap)
+                                            size: options.chunkSize, overlap: options.chunkOverlap,
+                                            minLength: options.minChunkLength)
             drafts += pageDrafts
             sources += Array(repeating: content.source, count: pageDrafts.count)
         }
@@ -120,6 +124,7 @@ public struct DocumentIndexer: Sendable {
             stored.ocrSystemVersion = ocrPages > 0 ? ProcessInfo.processInfo.operatingSystemVersionString : nil
             stored.indexedChunkSize = options.chunkSize
             stored.indexedChunkOverlap = options.chunkOverlap
+            stored.indexedMinChunkLength = options.minChunkLength
             stored.indexedEmbedderKey = embedderKey
             stored.indexedAt = Date()
             try stored.update(db)

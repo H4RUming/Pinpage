@@ -23,6 +23,9 @@ final class AppModel {
         didSet {
             guard settings != oldValue else { return }
             scheduleSave()
+            if settings.embedding != oldValue.embedding || settings.chat != oldValue.chat || settings.network != oldValue.network {
+                embeddingManager.refresh(settings: settings)
+            }
         }
     }
 
@@ -40,6 +43,10 @@ final class AppModel {
     /// LLM 요청 기록. 마일스톤 4에서 이벤트 로그 DB로 바꾼다.
     let callRecorder = InMemoryLLMCallRecorder()
 
+    let embeddingManager: EmbeddingManager
+    /// 학습 세트 화면 상태. 앱 데이터 폴더를 열지 못하면 nil.
+    private(set) var libraryModel: LibraryModel?
+
     private let repository: SettingsRepository?
     private var saveTask: Task<Void, Never>?
 
@@ -50,17 +57,48 @@ final class AppModel {
     }
 
     init() {
-        do {
-            let repository = SettingsRepository(directory: try SettingsRepository.defaultDirectory())
-            let loaded = repository.load()
+        let dataDirectory = try? SettingsRepository.defaultDirectory()
+        if let dataDirectory {
+            let repository = SettingsRepository(directory: dataDirectory)
+            // 처음 실행이면 앱에 들어 있는 기본 설정(임베딩 모델 저장소·버전 등)으로 시작한다.
+            if FileManager.default.fileExists(atPath: repository.fileURL.path) {
+                let loaded = repository.load()
+                self.settings = loaded.settings
+                self.banner = loaded.warning
+            } else {
+                self.settings = Self.bundledDefaults()
+                self.banner = nil
+            }
             self.repository = repository
-            self.settings = loaded.settings
-            self.banner = loaded.warning
-        } catch {
+        } else {
             self.repository = nil
-            self.settings = AppSettings()
-            self.banner = "앱 데이터 폴더를 만들 수 없어 설정이 저장되지 않습니다: \(error.localizedDescription)"
+            self.settings = Self.bundledDefaults()
+            self.banner = "앱 데이터 폴더를 만들 수 없어 설정과 자료가 저장되지 않습니다."
         }
+        let root = dataDirectory ?? FileManager.default.temporaryDirectory.appending(path: "Pinpage")
+        self.embeddingManager = EmbeddingManager(modelsRoot: root.appending(path: "models"))
+
+        if let dataDirectory {
+            do {
+                let database = try AppDatabase.open(at: dataDirectory.appending(path: "pinpage.sqlite"))
+                let library = Library(database: database, filesRoot: dataDirectory.appending(path: "sets"))
+                self.libraryModel = LibraryModel(library: library, app: self)
+            } catch {
+                self.banner = "자료 DB를 열 수 없습니다: \(error.localizedDescription)"
+            }
+        }
+        if repository != nil, !FileManager.default.fileExists(atPath: repository!.fileURL.path) {
+            saveNow()
+        }
+        embeddingManager.refresh(settings: settings)
+    }
+
+    private static func bundledDefaults() -> AppSettings {
+        guard let url = Bundle.main.url(forResource: "DefaultSettings", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let settings = try? JSONDecoder().decode(AppSettings.self, from: data)
+        else { return AppSettings() }
+        return settings
     }
 
     var settingsFileURL: URL? { repository?.fileURL }

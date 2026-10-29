@@ -1,0 +1,13 @@
+{
+  "embedding": {
+    "mode": "builtin",
+    "modelRepo": "H4RUming/embeddinggemma-2-coreml-text",
+    "modelRevision": "abdbb538c8013f897003dfc8861a012480d5e584",
+    "modelManifestSHA256": "f1c2ccaff197ef4735f1676f1efe0347fc7520c85476aa2749e8ee3a03ec554c",
+    "computeUnit": "gpu",
+    "dimension": 768
+  },
+  "retrieval": {
+    "ocrLanguages": ["ko-KR", "en-US"]
+  }
+}

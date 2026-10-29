@@ -49,6 +49,7 @@ public struct Document: Codable, Equatable, Identifiable, Sendable, FetchableRec
     /// 색인할 때 쓴 값. 현재 설정과 다르면 다시 색인해야 한다.
     public var indexedChunkSize: Int?
     public var indexedChunkOverlap: Int?
+    public var indexedMinChunkLength: Int?
     public var indexedEmbedderKey: String?
     public var indexedAt: Date?
     public var importedAt: Date
