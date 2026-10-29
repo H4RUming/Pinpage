@@ -3,12 +3,12 @@ import Testing
 @testable import PinpageCore
 
 /// 저장소의 실제 템플릿 폴더 (App/Resources/PromptTemplates).
-private let templateDirectory = URL(filePath: #filePath)
+let templateDirectory = URL(filePath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .deletingLastPathComponent().deletingLastPathComponent()
     .appending(path: "App/Resources/PromptTemplates")
 
-private func realTemplates() throws -> PromptTemplates {
+func realTemplates() throws -> PromptTemplates {
     try PromptTemplates { name in try? String(contentsOf: templateDirectory.appending(path: "\(name).md"), encoding: .utf8) }
 }
 
@@ -146,7 +146,11 @@ final class ChatServerStub: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 
-@Suite("답변과 힌트", .serialized)
+/// 가짜 LLM 서버(ChatServerStub)를 쓰는 테스트 묶음. 핸들러가 전역 하나라 순서대로 돌린다.
+@Suite(.serialized) enum ChatStubbed {}
+
+extension ChatStubbed {
+@Suite("답변과 힌트")
 struct AnswerEngineTests {
     private func makeEngine(enforceSchema: Bool = true, emptySet: Bool = false) async throws -> (AnswerEngine, String) {
         let library = Library(database: try AppDatabase.inMemory(),
@@ -307,6 +311,8 @@ struct AnswerEngineTests {
         ChatServerStub.queue([.content("그냥 문장으로 답했습니다.")])
         await #expect(throws: AnswerEngineError.self) { try await engine.answer(question: "교착", problem: nil, setId: setId) }
     }
+}
+
 }
 
 @Suite("생성 설정")

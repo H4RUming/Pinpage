@@ -40,8 +40,11 @@ final class AppModel {
     let chatState = EndpointState()
     let embeddingState = EndpointState()
     let appInfo = AppInfo.from(bundle: .main)
-    /// LLM 요청 기록. 마일스톤 4에서 이벤트 로그 DB로 바꾼다.
-    let callRecorder = InMemoryLLMCallRecorder()
+    /// 이벤트 로그. 앱 데이터 폴더를 열지 못하면 nil.
+    private(set) var eventLogger: EventLogger?
+    /// LLM 요청의 시도마다 이벤트 로그에 남긴다.
+    private(set) var callRecorder: (any LLMCallRecorder)?
+    private var lifecycleObservers: [NSObjectProtocol] = []
 
     let embeddingManager: EmbeddingManager
     /// 앱에 들어 있는 프롬프트 템플릿 (App/Resources/PromptTemplates).
@@ -87,6 +90,9 @@ final class AppModel {
             do {
                 let database = try AppDatabase.open(at: dataDirectory.appending(path: "pinpage.sqlite"))
                 let library = Library(database: database, filesRoot: dataDirectory.appending(path: "sets"))
+                let logger = EventLogger(database: database, appVersion: AppInfo.from(bundle: .main).version)
+                self.eventLogger = logger
+                self.callRecorder = EventLLMCallRecorder(logger: logger)
                 self.libraryModel = LibraryModel(library: library, app: self)
             } catch {
                 self.banner = "자료 DB를 열 수 없습니다: \(error.localizedDescription)"
@@ -97,6 +103,27 @@ final class AppModel {
         }
         embeddingManager.refresh(settings: settings)
         studyModel = StudyModel(app: self)
+        eventLogger?.log(.appLaunch, AppStatePayload(reason: "launch"))
+        observeLifecycle()
+    }
+
+    /// 앱이 뒤로 가거나 앞으로 올 때, Mac이 잠자기에 들어가거나 깨어날 때, 앱이 끝날 때를 기록한다.
+    private func observeLifecycle() {
+        let center = NotificationCenter.default
+        let workspace = NSWorkspace.shared.notificationCenter
+        let events: [(NotificationCenter, Notification.Name, EventType, String)] = [
+            (center, NSApplication.didResignActiveNotification, .appPause, "inactive"),
+            (center, NSApplication.didBecomeActiveNotification, .appResume, "active"),
+            (center, NSApplication.willTerminateNotification, .appQuit, "quit"),
+            (workspace, NSWorkspace.willSleepNotification, .appPause, "sleep"),
+            (workspace, NSWorkspace.didWakeNotification, .appResume, "wake"),
+        ]
+        for (notificationCenter, name, type, reason) in events {
+            let logger = eventLogger
+            lifecycleObservers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { _ in
+                logger?.log(type, AppStatePayload(reason: reason))
+            })
+        }
     }
 
     private static func bundledDefaults() -> AppSettings {

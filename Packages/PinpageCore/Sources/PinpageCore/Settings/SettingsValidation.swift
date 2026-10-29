@@ -15,6 +15,7 @@ public enum SettingsLimits {
     public static let embeddingDimensions = [768, 512, 256, 128]
     public static let temperature = 0.0...2.0
     public static let maxTokens = 64...8192
+    public static let difficulty = 1...3
 }
 
 public struct SettingsIssue: Equatable, Sendable {
@@ -90,6 +91,12 @@ extension AppSettings {
         if generation.extraBody == nil {
             issues.append(SettingsIssue(field: "추가 요청 파라미터", message: "JSON 객체({...}) 형식이어야 합니다."))
         }
+
+        if practice.problemTypes.isEmpty {
+            issues.append(SettingsIssue(field: "연습 문제 유형", message: "하나 이상 골라야 합니다."))
+        }
+        checkRange(practice.difficulty, SettingsLimits.difficulty, field: "연습 문제 난이도")
+        checkRange(practice.generationTemperature, SettingsLimits.temperature, field: "문제 생성 temperature")
 
         checkRange(learning.quizPassThreshold, SettingsLimits.quizPassThreshold, field: "퀴즈 통과 기준")
         checkRange(learning.hintLevels, SettingsLimits.hintLevels, field: "힌트 단계 수")

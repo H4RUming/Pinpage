@@ -15,11 +15,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var retrieval = RetrievalSettings()
     public var learning = LearningSettings()
     public var generation = GenerationSettings()
+    public var practice = PracticeSettings()
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, chat, embedding, network, retrieval, learning, generation
+        case schemaVersion, chat, embedding, network, retrieval, learning, generation, practice
     }
 
     public init(from decoder: Decoder) throws {
@@ -32,6 +33,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         retrieval = try c.decode(forKey: .retrieval, default: d.retrieval)
         learning = try c.decode(forKey: .learning, default: d.learning)
         generation = try c.decode(forKey: .generation, default: d.generation)
+        practice = try c.decode(forKey: .practice, default: d.practice)
     }
 }
 
@@ -258,6 +260,30 @@ public struct GenerationSettings: Codable, Equatable, Sendable {
         let trimmed = extraBodyJSON.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [:] }
         return (try? JSONSerialization.jsonObject(with: Data(trimmed.utf8))) as? [String: Any]
+    }
+}
+
+/// AI 연습 문제 설정.
+public struct PracticeSettings: Codable, Equatable, Sendable {
+    /// 낼 문제 유형
+    public var problemTypes: [ProblemType] = ProblemType.allCases
+    /// 기본 난이도 (1 기초, 2 보통, 3 심화). 실험 세션에서는 사전 퀴즈 결과로 정한다.
+    public var difficulty = 2
+    /// 문제 생성 temperature. 참가자마다 문제가 달라도 되므로 약간의 다양성을 둔다. 채점은 답변 temperature를 쓴다.
+    public var generationTemperature = 0.7
+
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case problemTypes, difficulty, generationTemperature
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = PracticeSettings()
+        problemTypes = try c.decode(forKey: .problemTypes, default: d.problemTypes)
+        difficulty = try c.decode(forKey: .difficulty, default: d.difficulty)
+        generationTemperature = try c.decode(forKey: .generationTemperature, default: d.generationTemperature)
     }
 }
 

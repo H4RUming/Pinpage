@@ -90,6 +90,20 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        migrator.registerMigration("v3: 이벤트 로그") { db in
+            try db.create(table: "event") { t in
+                t.autoIncrementedPrimaryKey("seq")
+                t.column("timestamp", .text).notNull()
+                t.column("type", .text).notNull().indexed()
+                t.column("sessionId", .text).indexed()
+                t.column("participantId", .text)
+                t.column("appVersion", .text).notNull()
+                t.column("payload", .text).notNull()
+            }
+        }
+
+        registerProblemMigrations(&migrator)
+
         return migrator
     }
 }

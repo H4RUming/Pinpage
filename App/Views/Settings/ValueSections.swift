@@ -68,6 +68,30 @@ struct ValueSections: View {
                 Text("답변과 힌트를 만들 때 쓰는 값입니다. 서버별 옵션은 추가 요청 파라미터에 JSON으로 넣습니다. 예: {\"chat_template_kwargs\": {\"enable_thinking\": false}} (Qwen 추론 끄기)")
             }
 
+            Section {
+                ForEach(ProblemType.allCases, id: \.self) { type in
+                    Toggle(type.label, isOn: problemTypeBinding(type))
+                }
+                Picker("난이도", selection: $model.settings.practice.difficulty) {
+                    Text("기초").tag(1)
+                    Text("보통").tag(2)
+                    Text("심화").tag(3)
+                }
+                LabeledContent("문제 생성 temperature") {
+                    HStack {
+                        Slider(value: $model.settings.practice.generationTemperature, in: 0...1, step: 0.1)
+                            .frame(width: 180)
+                        Text(model.settings.practice.generationTemperature, format: .number.precision(.fractionLength(1)))
+                            .monospacedDigit()
+                            .frame(width: 32, alignment: .trailing)
+                    }
+                }
+            } header: {
+                Text("연습 문제")
+            } footer: {
+                Text("AI가 학습 자료에서 연습 문제를 만들고 채점합니다. 실험 세션에서는 사전 퀴즈 결과로 난이도를 정합니다.")
+            }
+
             Section("학습") {
                 IntField(title: "퀴즈 통과 기준", value: passThresholdPercent, range: 0...100, step: 5, unit: "%")
                 IntField(title: "힌트 단계 수", value: $model.settings.learning.hintLevels,
@@ -75,6 +99,19 @@ struct ValueSections: View {
             }
         }
         .disabled(model.isSettingsLocked)
+    }
+
+    private func problemTypeBinding(_ type: ProblemType) -> Binding<Bool> {
+        @Bindable var model = model
+        return Binding(
+            get: { model.settings.practice.problemTypes.contains(type) },
+            set: { enabled in
+                var types = model.settings.practice.problemTypes.filter { $0 != type }
+                if enabled { types.append(type) }
+                // 설정 파일에서도 순서가 같도록 정해진 순서로 정렬한다.
+                model.settings.practice.problemTypes = ProblemType.allCases.filter(types.contains)
+            }
+        )
     }
 
     private var passThresholdPercent: Binding<Int> {

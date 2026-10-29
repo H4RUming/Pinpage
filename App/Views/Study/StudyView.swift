@@ -1,7 +1,7 @@
 import PinpageCore
 import SwiftUI
 
-/// 학습 화면: 왼쪽에 문제·질문·답변·힌트, 오른쪽에 근거 PDF.
+/// 학습 화면: 왼쪽에 연습 문제·힌트·질문, 오른쪽에 근거 PDF.
 struct StudyView: View {
     @Environment(AppModel.self) private var app
 
@@ -9,12 +9,14 @@ struct StudyView: View {
         if let library = app.libraryModel {
             HStack(spacing: 0) {
                 StudyPanel(study: app.studyModel, library: library)
-                    .frame(width: 430)
+                    .frame(width: 440)
                 Divider()
                 PDFViewerPane(target: app.studyModel.viewerTarget)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .navigationTitle("학습")
+            .onAppear { app.studyModel.startPracticeIfNeeded() }
+            .onChange(of: library.selectedSetId) { app.studyModel.startPracticeIfNeeded() }
         } else {
             ContentUnavailableView("자료 DB를 열 수 없습니다", systemImage: "exclamationmark.triangle")
         }
@@ -34,8 +36,6 @@ private struct StudyPanel: View {
                 .labelsHidden()
                 .fixedSize()
                 Spacer()
-                Button("기록 지우기") { study.clear() }
-                    .disabled(study.entries.isEmpty || study.isBusy)
             }
 
             if let reason = study.unavailableReason {
@@ -44,11 +44,10 @@ private struct StudyPanel: View {
                     .font(.callout)
             }
 
-            ProblemBox(study: study)
-
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ProblemCard(study: study)
                         ForEach(study.entries) { entry in
                             EntryCard(entry: entry, study: study).id(entry.id)
                         }
@@ -58,16 +57,10 @@ private struct StudyPanel: View {
                 .onChange(of: study.entries.count) {
                     if let last = study.entries.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
                 }
-                .overlay {
-                    if study.entries.isEmpty {
-                        ContentUnavailableView("자료에 대해 질문하세요", systemImage: "questionmark.bubble",
-                                               description: Text("답에는 근거 위치가 붙습니다. 자료에 없는 내용은 '자료에 없음'으로 답합니다."))
-                    }
-                }
             }
 
             HStack(alignment: .bottom) {
-                TextField("질문을 입력하세요", text: $study.question, axis: .vertical)
+                TextField("자료에 대해 질문하세요", text: $study.question, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...4)
                     .onSubmit { study.ask() }
@@ -80,28 +73,102 @@ private struct StudyPanel: View {
     }
 }
 
-/// 현재 연습 문제와 단계별 힌트 버튼.
-private struct ProblemBox: View {
+/// AI 연습 문제: 문제, 답안 입력, 채점 결과, 힌트.
+private struct ProblemCard: View {
     @Bindable var study: StudyModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("연습 문제").font(.headline)
-            TextField("풀고 있는 문제를 입력하세요 (연습 문제 자동 제시는 다음 단계에서 붙습니다)",
-                      text: $study.problem, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(2...4)
-            HStack {
-                if study.nextHintLevel <= study.hintLevelCount {
-                    Button("힌트 \(study.nextHintLevel)단계 보기") { study.requestHint() }
-                        .disabled(study.problem.trimmingCharacters(in: .whitespaces).isEmpty || study.isBusy)
-                    Text(hintDescription(study.nextHintLevel)).font(.caption).foregroundStyle(.secondary)
-                } else {
-                    Label("모든 힌트를 봤습니다", systemImage: "checkmark.circle").font(.callout).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            if let problem = study.currentProblem {
+                HStack {
+                    Text("연습 문제 \(study.problemNumber)").font(.headline)
+                    Text("\(problem.type.label) · \(difficultyLabel(problem.difficulty))")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
                 }
-                Spacer()
-                if study.isBusy { ProgressView().controlSize(.small) }
+                Text(problem.question).textSelection(.enabled)
+                answerInput(problem)
+                HStack {
+                    Button("제출") { study.submitAnswer() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!canSubmit(problem))
+                    if study.isGrading { ProgressView().controlSize(.small); Text("채점 중…").foregroundStyle(.secondary) }
+                    Spacer()
+                    Button(study.isSolved ? "다음 문제" : "건너뛰기") { study.nextProblem() }
+                        .disabled(study.isGrading || study.isGeneratingProblem)
+                }
+                if let last = study.attempts.last {
+                    GradeView(graded: last, problem: problem, attemptCount: study.attempts.count, study: study)
+                }
+                if !study.isSolved { hintRow }
+            } else if study.isGeneratingProblem {
+                HStack { ProgressView().controlSize(.small); Text("자료에서 연습 문제를 만드는 중…").foregroundStyle(.secondary) }
+            } else if study.unavailableReason == nil {
+                Button("연습 문제 시작") { study.nextProblem() }
             }
+            if let error = study.problemError {
+                Label(error, systemImage: "xmark.octagon.fill").foregroundStyle(.red).font(.callout).textSelection(.enabled)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder private func answerInput(_ problem: PracticeProblem) -> some View {
+        switch problem.type {
+        case .multipleChoice:
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(problem.choices.enumerated()), id: \.offset) { index, choice in
+                    Button {
+                        study.selectedChoice = index
+                    } label: {
+                        Label(choice, systemImage: study.selectedChoice == index ? "largecircle.fill.circle" : "circle")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(study.isSolved)
+                }
+            }
+        case .shortAnswer:
+            TextField("답을 입력하세요", text: $study.answerText)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { study.submitAnswer() }
+                .disabled(study.isSolved)
+        case .essay:
+            TextEditor(text: $study.answerText)
+                .font(.body)
+                .frame(height: 90)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
+                .disabled(study.isSolved)
+        }
+    }
+
+    private var hintRow: some View {
+        HStack {
+            if study.nextHintLevel <= study.hintLevelCount {
+                Button("힌트 \(study.nextHintLevel)단계") { study.requestHint() }
+                    .disabled(study.isBusy)
+                Text(hintDescription(study.nextHintLevel)).font(.caption).foregroundStyle(.secondary)
+            } else {
+                Label("모든 힌트를 봤습니다", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+    }
+
+    private func canSubmit(_ problem: PracticeProblem) -> Bool {
+        guard !study.isGrading, !study.isSolved else { return false }
+        return problem.type == .multipleChoice
+            ? study.selectedChoice != nil
+            : !study.answerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func difficultyLabel(_ level: Int) -> String {
+        switch level {
+        case 1: "기초"
+        case 3: "심화"
+        default: "보통"
         }
     }
 
@@ -110,6 +177,68 @@ private struct ProblemBox: View {
         case 1: "읽어야 할 위치"
         case 2: "해당 부분 설명"
         default: "정답과 풀이"
+        }
+    }
+}
+
+/// 채점 결과: 맞음/부분 정답/틀림, 피드백, 다시 읽어 볼 곳.
+private struct GradeView: View {
+    let graded: StudyModel.GradedAttempt
+    let problem: PracticeProblem
+    let attemptCount: Int
+    let study: StudyModel
+
+    var body: some View {
+        let attempt = graded.attempt
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label(attempt.verdict.label, systemImage: icon(attempt.verdict))
+                    .font(.callout.bold())
+                    .foregroundStyle(color(attempt.verdict))
+                if attempt.verdict == .partial {
+                    Text("\(Int((attempt.score * 100).rounded()))점").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("\(attemptCount)번째 제출").font(.caption2).foregroundStyle(.tertiary)
+            }
+            if !attempt.feedback.isEmpty {
+                Text(attempt.feedback).font(.callout).textSelection(.enabled)
+            }
+            if attempt.verdict == .correct, problem.type != .multipleChoice {
+                Text("모범 답안: \(problem.modelAnswer)").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            if !graded.missed.isEmpty {
+                Text("다시 읽어 볼 곳").font(.caption).foregroundStyle(.secondary)
+                ForEach(graded.missed) { missed in
+                    Button {
+                        study.show(missed)
+                    } label: {
+                        Label(missed.label, systemImage: missed.chunk.source == .ocr ? "doc.viewfinder" : "doc.text")
+                            .font(.callout).lineLimit(1).truncationMode(.middle)
+                    }
+                    .buttonStyle(.link)
+                }
+                Text("읽어 본 뒤 다시 답해 보세요.").font(.caption2).foregroundStyle(.tertiary)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color(attempt.verdict).opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func icon(_ verdict: Verdict) -> String {
+        switch verdict {
+        case .correct: "checkmark.circle.fill"
+        case .partial: "circle.lefthalf.filled"
+        case .incorrect: "xmark.circle.fill"
+        }
+    }
+
+    private func color(_ verdict: Verdict) -> Color {
+        switch verdict {
+        case .correct: .green
+        case .partial: .orange
+        case .incorrect: .red
         }
     }
 }
@@ -155,7 +284,7 @@ private struct EntryCard: View {
                 ForEach(StudyModel.grouped(result.citations), id: \.first!.source) { group in
                     let first = group[0]
                     Button {
-                        study.show(group)
+                        study.show(group, requestId: entry.requestId)
                     } label: {
                         Label(first.label, systemImage: first.hit.chunk.source == .ocr ? "doc.viewfinder" : "doc.text")
                             .font(.callout)

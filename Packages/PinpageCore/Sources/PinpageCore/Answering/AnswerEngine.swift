@@ -223,23 +223,13 @@ public struct AnswerEngine: Sendable {
                       citations: citations, dropped: dropped, completion: completion, usedSchema: usedSchema)
     }
 
-    /// JSON 스키마로 요청하고, 서버가 스키마를 거부하면(400대) 한 번만 스키마 없이 다시 보낸다.
     private func complete(messages: [ChatMessage], schema: [String: Any]) async throws -> (ChatCompletion, Bool) {
-        let extra = configuration.extraBody.value as? [String: Any] ?? [:]
-        if configuration.enforceJSONSchema {
-            do {
-                let completion = try await client.chatCompletion(
-                    model: configuration.model, messages: messages, temperature: configuration.temperature,
-                    maxTokens: configuration.maxTokens, jsonSchema: ("grounded_answer", schema), extraBody: extra)
-                return (completion, true)
-            } catch let error as LLMRequestError {
-                guard case .badRequest = error.kind else { throw error }
-            }
-        }
-        let completion = try await client.chatCompletion(
-            model: configuration.model, messages: messages, temperature: configuration.temperature,
-            maxTokens: configuration.maxTokens, jsonSchema: nil, extraBody: extra)
-        return (completion, false)
+        let request = StructuredRequest(
+            model: configuration.model, temperature: configuration.temperature, maxTokens: configuration.maxTokens,
+            enforceJSONSchema: configuration.enforceJSONSchema,
+            extraBody: configuration.extraBody.value as? [String: Any] ?? [:])
+        return try await StructuredCompletion.run(client: client, request: request, messages: messages,
+                                                  schemaName: "grounded_answer", schema: schema)
     }
 
     static func verify(_ raw: [RawGroundedResponse.Citation], hits: [SearchHit]) -> ([VerifiedCitation], [DroppedCitation]) {

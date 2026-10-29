@@ -41,6 +41,7 @@ struct SettingsView: View {
             }
             ValueSections()
             SettingsFileSection()
+            RecentEventsSection()
         }
         .formStyle(.grouped)
         .navigationTitle("설정")
@@ -53,6 +54,48 @@ struct SettingsView: View {
         } message: { alert in
             Text(alert.message)
         }
+    }
+}
+
+/// 진행자 확인용: 최근 이벤트 로그.
+private struct RecentEventsSection: View {
+    @Environment(AppModel.self) private var model
+    @State private var events: [EventRecord] = []
+
+    var body: some View {
+        Section {
+            if events.isEmpty {
+                Text("기록된 이벤트가 없습니다.").foregroundStyle(.secondary)
+            }
+            ForEach(events, id: \.seq) { event in
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text("#\(event.seq ?? 0)").monospacedDigit().foregroundStyle(.secondary)
+                        Text(event.type).font(.callout.monospaced().bold())
+                        Spacer()
+                        Text(event.timestamp).font(.caption.monospaced()).foregroundStyle(.secondary)
+                    }
+                    Text(event.payload)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                }
+            }
+        } header: {
+            HStack {
+                Text("최근 이벤트")
+                Spacer()
+                Button("새로고침") { reload() }.font(.caption)
+            }
+        } footer: {
+            Text("이벤트는 일어나는 즉시 이 Mac의 DB에 기록됩니다 (시각은 UTC). 실험 전에 기록이 남는지 확인하세요.")
+        }
+        .onAppear { reload() }
+    }
+
+    private func reload() {
+        events = (try? model.eventLogger?.recent(limit: 30)) ?? []
     }
 }
 
