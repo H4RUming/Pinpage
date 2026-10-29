@@ -211,6 +211,8 @@ final class LibraryModel {
         guard var state = indexing, state.fileName == progress.fileName else { return }
         switch progress.phase {
         case .reading(let page, let count, let ocr):
+            // 색인이 시작되면 문서 상태가 "색인 중"으로 바뀌었으므로 표를 다시 읽는다.
+            if page == 1 { reloadDocuments() }
             state.detail = "\(page)/\(count)쪽 읽는 중" + (ocr ? " (OCR)" : "")
             state.fraction = Double(page) / Double(max(count, 1)) * 0.6
         case .embedding(let done, let count):
@@ -225,7 +227,13 @@ final class LibraryModel {
 
     func runSearch() {
         guard let setId = selectedSetId else { return }
-        let query = query
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 빈 질문으로는 검색하지 않는다 (이전 결과도 지운다).
+        guard !query.isEmpty else {
+            searchResult = nil
+            searchError = nil
+            return
+        }
         let settings = app.settings
         let manager = app.embeddingManager
         isSearching = true
