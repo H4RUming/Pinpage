@@ -1,5 +1,16 @@
 import Foundation
 
+/// 채팅 완성 결과.
+public struct ChatCompletion: Equatable, Sendable {
+    public let content: String
+    /// 추론 모델의 생각 과정 (서버가 따로 돌려줄 때). 화면에는 보여주지 않고 로그에만 남긴다.
+    public let reasoning: String?
+    public let latencyMs: Int
+    public let attempts: Int
+    /// "stop", "length"(최대 토큰에서 잘림) 등
+    public let finishReason: String?
+}
+
 /// 연결 테스트 결과.
 public struct ConnectionTestResult: Equatable, Sendable {
     /// 마지막(성공한) 시도의 응답 시간.
@@ -92,6 +103,45 @@ public struct OpenAIClient: Sendable {
         return items.map { VectorMath.normalized($0.element.embedding.map(Float.init)) }
     }
 
+    /// 채팅 완성 (`POST /v1/chat/completions`).
+    /// - Parameters:
+    ///   - jsonSchema: 주면 `response_format: json_schema`로 응답 형식을 강제한다
+    ///   - extraBody: 서버별 추가 파라미터 (예: vLLM `chat_template_kwargs`). 기본 필드를 덮어쓰지 않는다
+    public func chatCompletion(
+        model: String,
+        messages: [ChatMessage],
+        temperature: Double,
+        maxTokens: Int,
+        jsonSchema: (name: String, schema: [String: Any])? = nil,
+        extraBody: [String: Any] = [:]
+    ) async throws -> ChatCompletion {
+        guard !model.isEmpty else { throw failure(.modelNotSelected, attempts: 0) }
+        var body: [String: Any] = extraBody
+        body["model"] = model
+        body["messages"] = messages.map { ["role": $0.role, "content": $0.content] }
+        body["temperature"] = temperature
+        body["max_tokens"] = maxTokens
+        if let jsonSchema {
+            body["response_format"] = [
+                "type": "json_schema",
+                "json_schema": ["name": jsonSchema.name, "strict": true, "schema": jsonSchema.schema],
+            ]
+        }
+        let data: Data
+        do {
+            data = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        } catch {
+            throw failure(.other("요청을 만들 수 없습니다: \(error.localizedDescription)"), attempts: 0)
+        }
+        let result: Sent<ChatCompletionResponse> = try await send(.chat, model: model, method: "POST", path: "chat/completions", bodyData: data)
+        guard let message = result.value.choices.first?.message else {
+            throw failure(.invalidResponse, attempts: result.attempts)
+        }
+        return ChatCompletion(content: message.content ?? "", reasoning: message.reasoningContent ?? message.reasoning,
+                              latencyMs: result.latencyMs, attempts: result.attempts,
+                              finishReason: result.value.choices.first?.finishReason)
+    }
+
     // MARK: - 요청과 재시도
 
     struct Sent<Value> {
@@ -113,7 +163,25 @@ public struct OpenAIClient: Sendable {
         path: String,
         body: Body?
     ) async throws -> Sent<Response> {
-        let request = try makeRequest(method: method, path: path, body: body)
+        var data: Data?
+        if let body {
+            do {
+                data = try JSONEncoder().encode(body)
+            } catch {
+                throw failure(.other("요청을 만들 수 없습니다: \(error.localizedDescription)"), attempts: 0)
+            }
+        }
+        return try await send(operation, model: model, method: method, path: path, bodyData: data)
+    }
+
+    func send<Response: Decodable>(
+        _ operation: LLMOperation,
+        model: String?,
+        method: String,
+        path: String,
+        bodyData: Data?
+    ) async throws -> Sent<Response> {
+        let request = makeRequest(method: method, path: path, body: bodyData)
         let clock = ContinuousClock()
         var attempt = 0
 
@@ -160,7 +228,7 @@ public struct OpenAIClient: Sendable {
         }
     }
 
-    private func makeRequest<Body: Encodable>(method: String, path: String, body: Body?) throws -> URLRequest {
+    private func makeRequest(method: String, path: String, body: Data?) -> URLRequest {
         var request = URLRequest(url: endpoint.url(for: path))
         request.httpMethod = method
         request.timeoutInterval = TimeInterval(timeoutSeconds)
@@ -171,11 +239,7 @@ public struct OpenAIClient: Sendable {
         }
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            do {
-                request.httpBody = try JSONEncoder().encode(body)
-            } catch {
-                throw failure(.other("요청을 만들 수 없습니다: \(error.localizedDescription)"), attempts: 0)
-            }
+            request.httpBody = body
         }
         return request
     }

@@ -44,6 +44,10 @@ final class AppModel {
     let callRecorder = InMemoryLLMCallRecorder()
 
     let embeddingManager: EmbeddingManager
+    /// 앱에 들어 있는 프롬프트 템플릿 (App/Resources/PromptTemplates).
+    let promptTemplates: Result<PromptTemplates, PromptTemplateError>
+    /// 학습 화면 상태. init 끝에서 만든다.
+    private(set) var studyModel: StudyModel!
     /// 학습 세트 화면 상태. 앱 데이터 폴더를 열지 못하면 nil.
     private(set) var libraryModel: LibraryModel?
 
@@ -77,6 +81,7 @@ final class AppModel {
         }
         let root = dataDirectory ?? FileManager.default.temporaryDirectory.appending(path: "Pinpage")
         self.embeddingManager = EmbeddingManager(modelsRoot: root.appending(path: "models"))
+        self.promptTemplates = Result { () throws(PromptTemplateError) in try PromptTemplates.bundled(.main) }
 
         if let dataDirectory {
             do {
@@ -91,6 +96,7 @@ final class AppModel {
             saveNow()
         }
         embeddingManager.refresh(settings: settings)
+        studyModel = StudyModel(app: self)
     }
 
     private static func bundledDefaults() -> AppSettings {

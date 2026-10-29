@@ -9,9 +9,17 @@ struct ModelsResponse: Decodable {
     let data: [Model]
 }
 
-struct ChatMessage: Codable, Sendable {
-    let role: String
-    let content: String
+public struct ChatMessage: Codable, Equatable, Sendable {
+    public let role: String
+    public let content: String
+
+    public init(role: String, content: String) {
+        self.role = role
+        self.content = content
+    }
+
+    public static func system(_ content: String) -> ChatMessage { ChatMessage(role: "system", content: content) }
+    public static func user(_ content: String) -> ChatMessage { ChatMessage(role: "user", content: content) }
 }
 
 struct ChatCompletionRequest: Encodable {
@@ -30,8 +38,21 @@ struct ChatCompletionResponse: Decodable {
     struct Choice: Decodable {
         struct Message: Decodable {
             let content: String?
+            let reasoningContent: String?
+            let reasoning: String?
+
+            enum CodingKeys: String, CodingKey {
+                case content, reasoning
+                case reasoningContent = "reasoning_content"
+            }
         }
         let message: Message?
+        let finishReason: String?
+
+        enum CodingKeys: String, CodingKey {
+            case message
+            case finishReason = "finish_reason"
+        }
     }
     let choices: [Choice]
 }

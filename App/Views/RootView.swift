@@ -42,7 +42,7 @@ struct RootView: View {
             case .sets:
                 LearningSetsView()
             case .study:
-                ContentUnavailableView("학습 화면은 준비 중입니다", systemImage: "book", description: Text("마일스톤 3~4에서 구현합니다."))
+                StudyView()
             case .session:
                 ContentUnavailableView("실험 세션은 준비 중입니다", systemImage: "timer", description: Text("마일스톤 5에서 구현합니다."))
             case .settings:

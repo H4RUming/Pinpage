@@ -32,7 +32,7 @@ final class LibraryModel {
 
     let library: Library
     private let indexer: DocumentIndexer
-    private let search: SearchService
+    let search: SearchService
     private unowned let app: AppModel
     private var queue: [String] = []
     private var indexTask: Task<Void, Never>?

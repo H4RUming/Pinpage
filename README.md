@@ -28,6 +28,7 @@ Packages/PinpageCore/       UI 없는 핵심 로직과 테스트
   Ingest/                   PDF 텍스트·OCR 추출, 문단 나누기, 청크 나누기, 색인
   Search/                   BM25(한글 음절 바이그램), 하이브리드 검색
   Embedding/                Gemma 토크나이저, Core ML·원격 임베더, 모델 설치
+  Answering/                근거 인용 답변·단계별 힌트, 인용 검증, PDF 강조 위치 찾기
 App/                        SwiftUI 앱 (학습 세트, 설정 화면)
 Tools/                      가짜 OpenAI 서버, 임베딩 모델 준비·검증 스크립트
 ```
@@ -57,6 +58,16 @@ Tools/                      가짜 OpenAI 서버, 임베딩 모델 준비·검�
 - `gpu-server:8000`처럼 스킴 없이 입력하면 `http://`를 붙이고, `/v1`로 끝나지 않으면 `/v1`을 붙입니다.
 - API 키를 비워두면 `Authorization` 헤더를 보내지 않습니다 (로컬 IP, Tailscale 서버).
 - Tailscale MagicDNS 짧은 이름(`gpu-server`)도 그대로 쓸 수 있습니다.
+
+## 답변과 힌트
+
+- 질문 → 하이브리드 검색 → 번호 붙인 근거와 함께 LLM에 요청 → JSON(`status`, `answer`, `citations[{source, quote}]`)으로 받습니다.
+- 인용이 실제로 근거 청크에 있는지 앱이 검증합니다. 확인되지 않은 인용은 버리고, 남는 근거가 없으면 "자료에 없음"으로 답합니다.
+- 근거를 누르면 PDF 뷰어가 해당 쪽으로 이동해 인용 문장을 강조합니다 (OCR 페이지는 영역 강조).
+- 힌트 1단계는 위치만(문구는 앱이 만듦), 2단계는 설명, 3단계는 정답과 풀이입니다.
+- 프롬프트는 `App/Resources/PromptTemplates/*.md`에 있습니다. 템플릿 식별값은 결과와 함께 기록합니다.
+- Qwen 같은 추론 모델은 설정의 추가 요청 파라미터로 추론을 끄는 것을 권장합니다
+  (`{"chat_template_kwargs": {"enable_thinking": false}}`). 실측에서 켜면 17초에 오답, 끄면 3.8초에 정답이었습니다.
 
 ## 가짜 서버로 확인하기
 

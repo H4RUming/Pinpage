@@ -14,11 +14,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var network = NetworkSettings()
     public var retrieval = RetrievalSettings()
     public var learning = LearningSettings()
+    public var generation = GenerationSettings()
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, chat, embedding, network, retrieval, learning
+        case schemaVersion, chat, embedding, network, retrieval, learning, generation
     }
 
     public init(from decoder: Decoder) throws {
@@ -30,6 +31,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         network = try c.decode(forKey: .network, default: d.network)
         retrieval = try c.decode(forKey: .retrieval, default: d.retrieval)
         learning = try c.decode(forKey: .learning, default: d.learning)
+        generation = try c.decode(forKey: .generation, default: d.generation)
     }
 }
 
@@ -223,6 +225,39 @@ public struct LearningSettings: Codable, Equatable, Sendable {
         let d = LearningSettings()
         quizPassThreshold = try c.decode(forKey: .quizPassThreshold, default: d.quizPassThreshold)
         hintLevels = try c.decode(forKey: .hintLevels, default: d.hintLevels)
+    }
+}
+
+/// 답변·힌트 생성 요청 값.
+public struct GenerationSettings: Codable, Equatable, Sendable {
+    public var temperature = 0.0
+    /// 답변 최대 토큰.
+    public var maxTokens = 1024
+    /// JSON 스키마로 응답 형식을 강제한다 (서버가 지원하지 않으면 프롬프트로만 요구한다).
+    public var enforceJSONSchema = true
+    /// 서버별 추가 요청 파라미터 (JSON 객체). 예: {"chat_template_kwargs": {"enable_thinking": false}}
+    public var extraBodyJSON = ""
+
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case temperature, maxTokens, enforceJSONSchema, extraBodyJSON
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = GenerationSettings()
+        temperature = try c.decode(forKey: .temperature, default: d.temperature)
+        maxTokens = try c.decode(forKey: .maxTokens, default: d.maxTokens)
+        enforceJSONSchema = try c.decode(forKey: .enforceJSONSchema, default: d.enforceJSONSchema)
+        extraBodyJSON = try c.decode(forKey: .extraBodyJSON, default: d.extraBodyJSON)
+    }
+
+    /// 추가 요청 파라미터. 비어 있으면 빈 객체, JSON 객체가 아니면 nil.
+    public var extraBody: [String: Any]? {
+        let trimmed = extraBodyJSON.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [:] }
+        return (try? JSONSerialization.jsonObject(with: Data(trimmed.utf8))) as? [String: Any]
     }
 }
 

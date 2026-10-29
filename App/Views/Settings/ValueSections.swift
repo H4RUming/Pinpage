@@ -42,6 +42,32 @@ struct ValueSections: View {
                 Text("문단 하나가 청크 하나가 됩니다. 청크 크기보다 긴 문단은 겹침만큼 겹치게 자르고, 합치기 기준보다 짧은 문단(제목 등)은 다음 문단과 합칩니다. 임베딩 검색 비중이 0이면 키워드 검색(BM25)만, 1이면 임베딩 검색만 사용합니다. 이 값들이 바뀌면 학습 세트를 다시 색인해야 합니다.")
             }
 
+            Section {
+                LabeledContent("temperature") {
+                    HStack {
+                        Slider(value: $model.settings.generation.temperature, in: 0...1, step: 0.1)
+                            .frame(width: 180)
+                        Text(model.settings.generation.temperature, format: .number.precision(.fractionLength(1)))
+                            .monospacedDigit()
+                            .frame(width: 32, alignment: .trailing)
+                    }
+                }
+                IntField(title: "최대 답변 토큰", value: $model.settings.generation.maxTokens,
+                         range: SettingsLimits.maxTokens, step: 256, unit: "토큰")
+                Toggle("응답 형식 강제 (JSON 스키마)", isOn: $model.settings.generation.enforceJSONSchema)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("추가 요청 파라미터 (JSON)")
+                    TextEditor(text: $model.settings.generation.extraBodyJSON)
+                        .font(.body.monospaced())
+                        .frame(height: 54)
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(.quaternary))
+                }
+            } header: {
+                Text("답변 생성")
+            } footer: {
+                Text("답변과 힌트를 만들 때 쓰는 값입니다. 서버별 옵션은 추가 요청 파라미터에 JSON으로 넣습니다. 예: {\"chat_template_kwargs\": {\"enable_thinking\": false}} (Qwen 추론 끄기)")
+            }
+
             Section("학습") {
                 IntField(title: "퀴즈 통과 기준", value: passThresholdPercent, range: 0...100, step: 5, unit: "%")
                 IntField(title: "힌트 단계 수", value: $model.settings.learning.hintLevels,

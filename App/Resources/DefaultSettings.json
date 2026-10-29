@@ -8,6 +8,15 @@
     "dimension": 768
   },
   "retrieval": {
-    "ocrLanguages": ["ko-KR", "en-US"]
+    "ocrLanguages": [
+      "ko-KR",
+      "en-US"
+    ]
+  },
+  "generation": {
+    "temperature": 0,
+    "maxTokens": 1024,
+    "enforceJSONSchema": true,
+    "extraBodyJSON": "{\"chat_template_kwargs\": {\"enable_thinking\": false}}"
   }
 }

@@ -13,6 +13,8 @@ public enum SettingsLimits {
     public static let quizPassThreshold = 0.0...1.0
     public static let hintLevels = 1...5
     public static let embeddingDimensions = [768, 512, 256, 128]
+    public static let temperature = 0.0...2.0
+    public static let maxTokens = 64...8192
 }
 
 public struct SettingsIssue: Equatable, Sendable {
@@ -82,6 +84,12 @@ extension AppSettings {
         }
         checkRange(retrieval.topK, SettingsLimits.topK, field: "검색 결과 개수")
         checkRange(retrieval.embeddingWeight, SettingsLimits.embeddingWeight, field: "임베딩 검색 비중")
+
+        checkRange(generation.temperature, SettingsLimits.temperature, field: "temperature")
+        checkRange(generation.maxTokens, SettingsLimits.maxTokens, field: "최대 답변 토큰")
+        if generation.extraBody == nil {
+            issues.append(SettingsIssue(field: "추가 요청 파라미터", message: "JSON 객체({...}) 형식이어야 합니다."))
+        }
 
         checkRange(learning.quizPassThreshold, SettingsLimits.quizPassThreshold, field: "퀴즈 통과 기준")
         checkRange(learning.hintLevels, SettingsLimits.hintLevels, field: "힌트 단계 수")
