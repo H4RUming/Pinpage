@@ -30,7 +30,10 @@ public enum PDFExtractor {
                let selection = page.selection(for: range) {
                 let rect = selection.bounds(for: page)
                 if !rect.isEmpty {
-                    lines.append(TextLine(text: ns.substring(with: range), rect: rect, range: range))
+                    let first = page.selection(for: NSRange(location: range.location, length: 1))?.bounds(for: page)
+                    lines.append(TextLine(text: ns.substring(with: range), rect: rect, range: range,
+                                          wordGap: wordGap(in: range, text: ns, page: page),
+                                          firstGlyphWidth: first.flatMap { $0.isEmpty ? nil : $0.width }))
                 }
             }
         }
@@ -44,6 +47,30 @@ public enum PDFExtractor {
         }
         addLine(end: ns.length)
         return PageContent(pageIndex: index, text: text, lines: lines, source: .text)
+    }
+
+    /// 줄 안 단어 사이 간격의 중앙값: 공백 앞 글자의 오른쪽 끝과 뒤 글자의 왼쪽 끝 사이.
+    /// `characterBounds(at:)`는 줄바꿈 문자를 세지 않아 줄마다 위치가 밀리므로 글자 하나짜리 선택 영역을 쓴다.
+    static func wordGap(in range: NSRange, text: NSString, page: PDFPage) -> CGFloat? {
+        func bounds(_ index: Int) -> CGRect {
+            page.selection(for: NSRange(location: index, length: 1))?.bounds(for: page) ?? .zero
+        }
+        var gaps: [CGFloat] = []
+        let end = NSMaxRange(range)
+        var i = range.location + 1
+        while i < end - 1 {
+            if text.character(at: i) == 0x20,
+               text.character(at: i - 1) != 0x20, text.character(at: i + 1) != 0x20 {
+                let before = bounds(i - 1)
+                let after = bounds(i + 1)
+                if !before.isEmpty, !after.isEmpty, after.minX > before.maxX {
+                    gaps.append(after.minX - before.maxX)
+                }
+            }
+            i += 1
+        }
+        guard !gaps.isEmpty else { return nil }
+        return gaps.sorted()[gaps.count / 2]
     }
 
     /// 페이지를 이미지로 그려 Vision으로 읽는다. 맞춤법 교정은 끈다 (코드·수식이 바뀌지 않도록).

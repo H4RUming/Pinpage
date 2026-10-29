@@ -76,13 +76,19 @@ public struct DocumentIndexer: Sendable {
                                        phase: .reading(page: page, of: count, ocr: ocr)))
         }
 
+        let pages = pageContents.map { ($0, ParagraphSegmenter.paragraphs(from: $0.lines)) }
+        // 줄바꿈 방식은 문서 단위로 판정한다 (스캔 페이지와 텍스트 페이지는 따로).
+        let textStyle = LineJoiner.style(pages: pages.filter { $0.0.source == .text })
+        let ocrStyle = LineJoiner.style(pages: pages.filter { $0.0.source == .ocr })
+
         var drafts: [ChunkDraft] = []
         var sources: [ChunkSource] = []
-        for content in pageContents {
-            let paragraphs = ParagraphSegmenter.paragraphs(from: content.lines)
+        for (content, paragraphs) in pages {
+            let softBreaks = LineJoiner.softBreaks(page: content, paragraphs: paragraphs,
+                                                   style: content.source == .ocr ? ocrStyle : textStyle)
             let pageDrafts = Chunker.chunks(page: content, paragraphs: paragraphs,
                                             size: options.chunkSize, overlap: options.chunkOverlap,
-                                            minLength: options.minChunkLength)
+                                            minLength: options.minChunkLength, softBreaks: softBreaks)
             drafts += pageDrafts
             sources += Array(repeating: content.source, count: pageDrafts.count)
         }

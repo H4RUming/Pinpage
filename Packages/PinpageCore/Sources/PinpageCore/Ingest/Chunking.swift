@@ -5,11 +5,17 @@ public struct TextLine: Equatable, Sendable {
     public var text: String
     public var rect: CGRect
     public var range: NSRange
+    /// 줄 안의 단어 사이 간격(중앙값, 페이지 좌표). 양쪽 정렬 판정에 쓴다. 알 수 없으면 nil (OCR 등).
+    public var wordGap: CGFloat?
+    /// 첫 글자의 폭. 앞 줄 끝에 이 글자가 들어갈 자리가 있었는지 판단하는 데 쓴다. 알 수 없으면 nil.
+    public var firstGlyphWidth: CGFloat?
 
-    public init(text: String, rect: CGRect, range: NSRange) {
+    public init(text: String, rect: CGRect, range: NSRange, wordGap: CGFloat? = nil, firstGlyphWidth: CGFloat? = nil) {
         self.text = text
         self.rect = rect
         self.range = range
+        self.wordGap = wordGap
+        self.firstGlyphWidth = firstGlyphWidth
     }
 }
 
@@ -95,9 +101,20 @@ public struct ChunkDraft: Equatable, Sendable {
 /// - `size`보다 긴 문단은 `overlap`만큼 겹치게 자른다 (가능하면 문장 끝이나 공백에서)
 /// 길이는 UTF-16 단위로 잰다.
 public enum Chunker {
-    public static func chunks(page: PageContent, paragraphs: [Paragraph], size: Int, overlap: Int, minLength: Int) -> [ChunkDraft] {
+    /// - Parameter softBreaks: 공백 없이 이을 줄바꿈 문자 위치 (`LineJoiner.softBreaks`)
+    public static func chunks(page: PageContent, paragraphs: [Paragraph], size: Int, overlap: Int, minLength: Int,
+                              softBreaks: Set<Int> = []) -> [ChunkDraft] {
         precondition(size > 0 && overlap >= 0 && overlap < size && minLength >= 0)
         let pageText = page.text as NSString
+
+        /// 범위의 텍스트. 단어 중간 줄바꿈은 지우고, 나머지 줄바꿈과 연속 공백은 공백 하나로 바꾼다.
+        func text(_ range: NSRange) -> String {
+            let soft = softBreaks.filter { NSLocationInRange($0, range) }.sorted(by: >)
+            guard !soft.isEmpty else { return clean(pageText.substring(with: range)) }
+            let mutable = NSMutableString(string: pageText.substring(with: range))
+            for index in soft { mutable.deleteCharacters(in: NSRange(location: index - range.location, length: 1)) }
+            return clean(mutable as String)
+        }
         var drafts: [ChunkDraft] = []
         /// 마지막 청크가 문단을 합친 것이라 뒤에 더 붙일 수 있는지 (긴 문단을 자른 조각이면 false)
         var lastIsWhole = false
@@ -110,7 +127,7 @@ public enum Chunker {
         func draft(of g: [Paragraph]) -> ChunkDraft {
             let first = g[0], last = g[g.count - 1]
             let range = NSRange(location: first.range.location, length: NSMaxRange(last.range) - first.range.location)
-            let text = g.map { clean(pageText.substring(with: $0.range)) }.joined(separator: "\n")
+            let text = g.map { text($0.range) }.joined(separator: "\n")
             return ChunkDraft(pageIndex: page.pageIndex, paragraphStart: first.index, paragraphEnd: last.index,
                               range: range, rects: g.flatMap { $0.lines.map(\.rect) }, text: text)
         }
@@ -127,7 +144,7 @@ public enum Chunker {
                 // 앞에 쌓인 짧은 문단은 따로 내보낸다.
                 emitGroup()
                 for window in windows(of: paragraph.range, in: pageText, size: size, overlap: overlap) {
-                    let text = clean(pageText.substring(with: window))
+                    let text = text(window)
                     guard !text.isEmpty else { continue }
                     let rects = paragraph.lines.filter { NSIntersectionRange($0.range, window).length > 0 }.map(\.rect)
                     drafts.append(ChunkDraft(
@@ -157,7 +174,7 @@ public enum Chunker {
                     range: NSRange(location: previous.range.location,
                                    length: NSMaxRange(group[group.count - 1].range) - previous.range.location),
                     rects: previous.rects + group.flatMap { $0.lines.map(\.rect) },
-                    text: ([previous.text] + group.map { clean(pageText.substring(with: $0.range)) }).joined(separator: "\n")
+                    text: ([previous.text] + group.map { text($0.range) }).joined(separator: "\n")
                 )
                 drafts[drafts.count - 1] = merged
                 group = []
