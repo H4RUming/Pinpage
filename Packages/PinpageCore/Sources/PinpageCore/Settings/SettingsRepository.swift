@@ -15,8 +15,13 @@ public struct SettingsRepository: Sendable {
         self.fileURL = directory.appending(path: "settings.json")
     }
 
-    /// 앱 데이터 폴더. 이후 마일스톤의 DB와 자료도 이 폴더에 둔다.
+    /// 앱 데이터 폴더 (설정, DB, 자료, 모델). 개발·검증용으로 환경 변수 `PINPAGE_DATA_DIR`이 있으면 그 폴더를 쓴다 (실제 데이터를 건드리지 않고 확인할 때).
     public static func defaultDirectory() throws -> URL {
+        if let override = ProcessInfo.processInfo.environment["PINPAGE_DATA_DIR"], !override.isEmpty {
+            let url = URL(filePath: override, directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            return url
+        }
         let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         return base.appending(path: "Pinpage", directoryHint: .isDirectory)
     }

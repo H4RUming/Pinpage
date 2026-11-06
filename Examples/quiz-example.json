@@ -1,0 +1,109 @@
+{
+  "format": "pinpage-quiz",
+  "formatVersion": 1,
+  "id": "cs-basics-example",
+  "title": "CS 기초 (예시)",
+  "quizzes": [
+    {
+      "kind": "pre",
+      "questions": [
+        {
+          "id": "pre-1",
+          "type": "multiple_choice",
+          "prompt": "교착 상태(데드락)가 생기기 위한 네 가지 조건에 들어가지 않는 것은?",
+          "choices": ["상호 배제", "점유 대기", "선점 가능", "순환 대기"],
+          "answer": 3
+        },
+        {
+          "id": "pre-2",
+          "type": "short_answer",
+          "prompt": "가까운 노드부터 차례로 방문하며, 가중치가 없는 그래프에서 최단 경로를 찾을 때 쓰는 탐색 방법은?",
+          "answers": ["너비 우선 탐색", "BFS", "breadth-first search"]
+        },
+        {
+          "id": "pre-3",
+          "type": "multiple_choice",
+          "prompt": "여러 스레드가 공유 데이터에 동시에 접근해 실행 순서에 따라 결과가 달라지는 문제는?",
+          "choices": ["교착 상태", "경쟁 상태", "기아 상태", "캐시 미스"],
+          "answer": 2
+        }
+      ]
+    },
+    {
+      "kind": "checkpoint",
+      "title": "체크포인트 퀴즈",
+      "questions": [
+        {
+          "id": "cp-1",
+          "type": "multiple_choice",
+          "prompt": "너비 우선 탐색(BFS)을 구현할 때 주로 쓰는 자료구조는?",
+          "choices": ["스택", "큐", "힙", "해시 테이블"],
+          "answer": 2
+        },
+        {
+          "id": "cp-2",
+          "type": "short_answer",
+          "prompt": "임계 구역을 한 번에 한 스레드만 들어가도록 보호하는 잠금 장치를 무엇이라고 하는가?",
+          "answers": ["뮤텍스", "mutex", "상호 배제 잠금"]
+        },
+        {
+          "id": "cp-3",
+          "type": "multiple_choice",
+          "prompt": "교착 상태의 네 조건 중, 프로세스들이 원형으로 서로의 자원을 기다리는 조건은?",
+          "choices": ["상호 배제", "점유 대기", "비선점", "순환 대기"],
+          "answer": 4
+        },
+        {
+          "id": "cp-4",
+          "type": "short_answer",
+          "prompt": "깊이 우선 탐색을 영어 약어로 쓰면?",
+          "answers": ["DFS"]
+        },
+        {
+          "id": "cp-5",
+          "type": "multiple_choice",
+          "prompt": "경쟁 상태를 막는 방법으로 알맞은 것은?",
+          "choices": ["스레드 수를 늘린다", "세마포어로 임계 구역을 보호한다", "캐시를 비운다", "우선순위를 무작위로 바꾼다"],
+          "answer": 2
+        }
+      ]
+    },
+    {
+      "kind": "final",
+      "questions": [
+        {
+          "id": "final-1",
+          "type": "multiple_choice",
+          "prompt": "교착 상태를 예방하려고 자원에 번호를 매겨 항상 번호 순서대로 요청하게 하면, 어떤 조건을 깨는 것인가?",
+          "choices": ["상호 배제", "점유 대기", "비선점", "순환 대기"],
+          "answer": 4,
+          "points": 2
+        },
+        {
+          "id": "final-2",
+          "type": "short_answer",
+          "prompt": "정수 값을 이용해 여러 스레드의 자원 접근 수를 제한하는 동기화 도구는?",
+          "answers": ["세마포어", "semaphore"]
+        }
+      ]
+    },
+    {
+      "kind": "retest",
+      "questions": [
+        {
+          "id": "retest-1",
+          "type": "multiple_choice",
+          "prompt": "가중치가 없는 그래프에서 시작 노드로부터의 최단 경로를 찾는 데 알맞은 탐색은?",
+          "choices": ["깊이 우선 탐색", "너비 우선 탐색", "이진 탐색", "선형 탐색"],
+          "answer": 2
+        },
+        {
+          "id": "retest-2",
+          "type": "short_answer",
+          "prompt": "둘 이상의 프로세스가 서로 상대의 자원을 기다리며 영원히 멈춘 상태를 무엇이라고 하는가?",
+          "answers": ["교착 상태", "데드락", "deadlock"]
+        }
+      ]
+    }
+  ]
+}

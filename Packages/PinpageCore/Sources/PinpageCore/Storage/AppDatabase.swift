@@ -103,6 +103,7 @@ public final class AppDatabase: Sendable {
         }
 
         registerProblemMigrations(&migrator)
+        registerExperimentMigrations(&migrator)
 
         return migrator
     }

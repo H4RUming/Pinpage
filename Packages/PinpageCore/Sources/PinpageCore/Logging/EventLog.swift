@@ -19,6 +19,14 @@ public enum EventType: String, Codable, CaseIterable, Sendable {
     case citationOpened = "citation_opened"
     case llmCall = "llm_call"
     case error
+    case sessionStarted = "session_started"
+    case sessionResumed = "session_resumed"
+    case sessionEnded = "session_ended"
+    case quizStarted = "quiz_started"
+    case quizSubmitted = "quiz_submitted"
+    case practiceDifficultySet = "practice_difficulty_set"
+    case documentOpened = "document_opened"
+    case documentSearched = "document_searched"
 }
 
 /// DB에 저장된 이벤트 한 줄.
@@ -65,7 +73,7 @@ public final class EventLogger: @unchecked Sendable {
         self.now = now
     }
 
-    /// 실험 세션(M5)이 시작되면 세션·참가자 ID를 붙인다.
+    /// 실험 세션이 진행 중이면 세션·참가자 ID를 붙인다.
     public var context: Context {
         get { lock.withLock { _context } }
         set { lock.withLock { _context = newValue } }
@@ -123,6 +131,8 @@ public final class EventLogger: @unchecked Sendable {
     static func encode<Payload: Encodable>(_ payload: Payload) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        // 설정 스냅샷 등에 API 키가 들어가지 않게 한다.
+        encoder.userInfo[.excludeSecrets] = true
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
             try container.encode(timestamp(date))

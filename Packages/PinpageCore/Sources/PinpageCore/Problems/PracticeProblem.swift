@@ -65,6 +65,8 @@ public struct PracticeProblem: Codable, Equatable, Identifiable, Sendable, Fetch
     public var templateFingerprint: String
     public var rawResponse: String
     public var latencyMs: Int
+    /// 실험 세션에서 만든 문제면 그 세션 ID (세션 밖에서 만든 문제와 섞지 않는다)
+    public var sessionId: String? = nil
 
     /// 힌트와 질문에 넣는 문제 문구 (객관식이면 보기 포함).
     public var promptText: String {

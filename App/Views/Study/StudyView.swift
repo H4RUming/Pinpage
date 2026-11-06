@@ -1,17 +1,18 @@
 import PinpageCore
 import SwiftUI
 
-/// 학습 화면: 왼쪽에 연습 문제·힌트·질문, 오른쪽에 근거 PDF.
+/// 학습 화면 (실험 세션 밖): 왼쪽에 연습 문제·힌트·질문, 오른쪽에 자료 뷰어.
 struct StudyView: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
         if let library = app.libraryModel {
             HStack(spacing: 0) {
-                StudyPanel(study: app.studyModel, library: library)
+                StudyPanel(study: app.studyModel, library: library, showsSetPicker: true)
                     .frame(width: 440)
                 Divider()
-                PDFViewerPane(target: app.studyModel.viewerTarget)
+                MaterialsView(documents: library.documents.map(\.document).filter { $0.kind == .pdf && $0.status == .indexed },
+                              library: library.library, target: app.studyModel.viewerTarget, logger: app.eventLogger)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .navigationTitle("학습")
@@ -23,19 +24,24 @@ struct StudyView: View {
     }
 }
 
-private struct StudyPanel: View {
+/// 연습 문제, 채점, 힌트, 자유 질문. 실험 세션(도구 조건)에서도 같은 패널을 쓴다.
+struct StudyPanel: View {
     @Bindable var study: StudyModel
     @Bindable var library: LibraryModel
+    /// 세션 중에는 세트를 바꿀 수 없으므로 숨긴다.
+    var showsSetPicker: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Picker("학습 세트", selection: $library.selectedSetId) {
-                    ForEach(library.sets) { set in Text(set.name).tag(Optional(set.id)) }
+            if showsSetPicker {
+                HStack {
+                    Picker("학습 세트", selection: $library.selectedSetId) {
+                        ForEach(library.sets) { set in Text(set.name).tag(Optional(set.id)) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    Spacer()
                 }
-                .labelsHidden()
-                .fixedSize()
-                Spacer()
             }
 
             if let reason = study.unavailableReason {

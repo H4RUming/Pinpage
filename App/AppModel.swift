@@ -29,8 +29,8 @@ final class AppModel {
         }
     }
 
-    /// 실험 세션 진행 중에는 true. 마일스톤 5에서 세션과 연결한다.
-    var isSettingsLocked = false
+    /// 실험 세션 진행 중에는 설정(모델, 주요 값, 설정 불러오기)을 바꿀 수 없다.
+    var isSettingsLocked: Bool { sessionModel?.isActive ?? false }
 
     /// 화면 위쪽에 보여줄 알림 (설정 파일 손상, 저장 실패 등).
     var banner: String?
@@ -51,6 +51,9 @@ final class AppModel {
     let promptTemplates: Result<PromptTemplates, PromptTemplateError>
     /// 학습 화면 상태. init 끝에서 만든다.
     private(set) var studyModel: StudyModel!
+    /// 실험 세션 상태. init 끝에서 만든다 (진행 중인 세션이 있으면 바로 복구한다).
+    private(set) var sessionModel: SessionModel!
+    private var sessionStore: SessionStore?
     /// 학습 세트 화면 상태. 앱 데이터 폴더를 열지 못하면 nil.
     private(set) var libraryModel: LibraryModel?
 
@@ -93,6 +96,7 @@ final class AppModel {
                 let logger = EventLogger(database: database, appVersion: AppInfo.from(bundle: .main).version)
                 self.eventLogger = logger
                 self.callRecorder = EventLLMCallRecorder(logger: logger)
+                self.sessionStore = SessionStore(database: database)
                 self.libraryModel = LibraryModel(library: library, app: self)
             } catch {
                 self.banner = "자료 DB를 열 수 없습니다: \(error.localizedDescription)"
@@ -104,10 +108,12 @@ final class AppModel {
         embeddingManager.refresh(settings: settings)
         studyModel = StudyModel(app: self)
         eventLogger?.log(.appLaunch, AppStatePayload(reason: "launch"))
+        sessionModel = SessionModel(app: self, store: sessionStore)
         observeLifecycle()
     }
 
-    /// 앱이 뒤로 가거나 앞으로 올 때, Mac이 잠자기에 들어가거나 깨어날 때, 앱이 끝날 때를 기록한다.
+    /// 앱이 뒤로 가거나 앞으로 올 때, Mac이 잠자기에 들어가거나 깨어날 때, 앱이 끝날 때를 기록하고
+    /// 실험 세션의 경과 시간 측정에 알린다.
     private func observeLifecycle() {
         let center = NotificationCenter.default
         let workspace = NSWorkspace.shared.notificationCenter
@@ -120,8 +126,18 @@ final class AppModel {
         ]
         for (notificationCenter, name, type, reason) in events {
             let logger = eventLogger
-            lifecycleObservers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { _ in
+            lifecycleObservers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 logger?.log(type, AppStatePayload(reason: reason))
+                MainActor.assumeIsolated {
+                    guard let session = self?.sessionModel else { return }
+                    switch reason {
+                    case "inactive": session.appDidResignActive()
+                    case "active": session.appDidBecomeActive()
+                    case "sleep": session.systemWillSleep()
+                    case "wake": session.systemDidWake()
+                    default: session.appWillTerminate()
+                    }
+                }
             })
         }
     }

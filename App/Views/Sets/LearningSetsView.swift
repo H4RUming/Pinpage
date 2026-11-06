@@ -73,6 +73,7 @@ private struct SetDetailView: View {
     @Binding var naming: LearningSetsView.NamingRequest?
     @Binding var deleting: LearningSet?
     @State private var isDropTarget = false
+    @State private var buildingPreQuiz = false
 
     var body: some View {
         VSplitView {
@@ -97,6 +98,7 @@ private struct SetDetailView: View {
             }
             .padding(20)
             .frame(maxWidth: .infinity, minHeight: 260, maxHeight: .infinity, alignment: .topLeading)
+            .sheet(isPresented: $buildingPreQuiz) { PreQuizBuilderView(set: set) }
 
             SearchTestView(library: library)
                 .padding(20)
@@ -118,6 +120,9 @@ private struct SetDetailView: View {
             Menu {
                 Button("새 학습 세트…") { naming = .init(setId: nil, name: "") }
                 Button("이름 바꾸기…") { naming = .init(setId: set.id, name: set.name) }
+                Divider()
+                Button("사전 퀴즈 만들기…") { buildingPreQuiz = true }
+                    .disabled(!library.documents.contains { $0.document.status == .indexed })
                 Divider()
                 Button("세트 삭제…", role: .destructive) { deleting = set }
             } label: {

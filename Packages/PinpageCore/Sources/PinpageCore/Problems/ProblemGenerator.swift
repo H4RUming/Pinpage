@@ -29,6 +29,7 @@ public struct ProblemGenerationFailure: Codable, Equatable, Sendable {
 /// 2. 아직 문제를 낸 적 없는 부분
 /// 3. 문제를 가장 적게 낸 부분
 /// 같은 순위 안에서는 무작위로 고른다. 참가자마다 문제가 달라도 되며, 실제로 낸 문제는 모두 기록한다.
+/// 실험 세션 안에서는 그 세션에서 낸 문제와 답만 보고 고른다 (세션 밖이면 세션 밖 문제만).
 ///
 /// 객관식은 만든 뒤 같은 모델에게 자료만 주고 temperature 0으로 직접 풀게 해서,
 /// 정답 번호와 다르게 풀거나 풀 수 없다고 하면 버린다 (정답 번호 자체가 틀린 문제를 걸러낸다).
@@ -60,21 +61,24 @@ public struct ProblemGenerator: Sendable {
         public let failures: [ProblemGenerationFailure]
     }
 
-    public func generate(setId: String, types: [ProblemType], difficulty: Int) async throws -> Output {
+    public func generate(setId: String, sessionId: String? = nil, types: [ProblemType], difficulty: Int) async throws -> Output {
         let types = types.isEmpty ? ProblemType.allCases : types
         var excluded = Set<Int64>()
         var failures: [ProblemGenerationFailure] = []
 
         for _ in 0..<Self.maximumTries {
-            guard let target = try pickTarget(setId: setId, excluding: excluded) else {
+            guard let target = try pickTarget(setId: setId, sessionId: sessionId, excluding: excluded) else {
                 if failures.isEmpty { throw ProblemGenerationError.noMaterials }
                 break
             }
             excluded.insert(target.chunk.id ?? -1)
             let type = types[random(types.count)]
             do {
-                let problem = try await makeProblem(setId: setId, target: target, type: type, difficulty: difficulty)
-                try await database.writer.write { db in try problem.insert(db) }
+                var problem = try await makeProblem(setId: setId, target: target, type: type, difficulty: difficulty,
+                                                    system: templates.problemSystem, user: templates.problemUser)
+                problem.sessionId = sessionId
+                let stored = problem
+                try await database.writer.write { db in try stored.insert(db) }
                 return Output(problem: problem, failures: failures)
             } catch let failure as Failure {
                 failures.append(ProblemGenerationFailure(chunkId: target.chunk.id ?? -1, type: type.rawValue,
@@ -95,7 +99,7 @@ public struct ProblemGenerator: Sendable {
         let previousQuestions: [String]
     }
 
-    func pickTarget(setId: String, excluding: Set<Int64>) throws -> Target? {
+    func pickTarget(setId: String, sessionId: String? = nil, excluding: Set<Int64>) throws -> Target? {
         try database.writer.read { db in
             let documents = try Document
                 .filter(Column("setId") == setId && Column("status") == DocumentStatus.indexed.rawValue)
@@ -109,7 +113,9 @@ public struct ProblemGenerator: Sendable {
             }
             guard !candidates.isEmpty else { return nil }
 
-            let problems = try PracticeProblem.filter(Column("setId") == setId).fetchAll(db)
+            let problems = try PracticeProblem
+                .filter(Column("setId") == setId && Column("sessionId") == sessionId)
+                .fetchAll(db)
             let attempts = try ProblemAttempt.filter(problems.map(\.id).contains(Column("problemId"))).fetchAll(db)
             let problemsById = Dictionary(uniqueKeysWithValues: problems.map { ($0.id, $0) })
 
@@ -159,12 +165,14 @@ public struct ProblemGenerator: Sendable {
 
     // MARK: - 문제 만들기
 
-    private struct Failure: Error {
+    struct Failure: Error {
         let reason: String
         let raw: String?
     }
 
-    private func makeProblem(setId: String, target: Target, type: ProblemType, difficulty: Int) async throws -> PracticeProblem {
+    /// 문제 하나를 만들고 검증한다 (저장하지 않는다). 사전 퀴즈 만들기는 다른 템플릿으로 같은 과정을 쓴다.
+    func makeProblem(setId: String, target: Target, type: ProblemType, difficulty: Int,
+                     system: String, user: String) async throws -> PracticeProblem {
         let sources = [target.chunk] + (target.neighbor.map { [$0] } ?? [])
         let sourceText: String = sources.enumerated().map { index, chunk -> String in
             let fileName = target.documents[chunk.documentId]?.fileName ?? ""
@@ -177,8 +185,8 @@ public struct ProblemGenerator: Sendable {
             "avoid": target.previousQuestions.isEmpty ? "(없음)" : target.previousQuestions.map { "- \($0)" }.joined(separator: "\n"),
         ]
         let messages = [
-            ChatMessage.system(try PromptTemplates.render(templates.problemSystem, values)),
-            ChatMessage.user(try PromptTemplates.render(templates.problemUser, values)),
+            ChatMessage.system(try PromptTemplates.render(system, values)),
+            ChatMessage.user(try PromptTemplates.render(user, values)),
         ]
         let (completion, _) = try await StructuredCompletion.run(client: client, request: request, messages: messages,
                                                                  schemaName: "practice_problem", schema: Self.schema)

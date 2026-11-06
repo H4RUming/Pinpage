@@ -31,9 +31,14 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var selection: SidebarItem? = .sets
 
+    /// 실험 세션 중에는 세션 화면과 (잠긴) 설정만 보인다.
+    private var items: [SidebarItem] {
+        model.isSettingsLocked ? [.session, .settings] : SidebarItem.allCases
+    }
+
     var body: some View {
         NavigationSplitView {
-            List(SidebarItem.allCases, selection: $selection) { item in
+            List(items, selection: $selection) { item in
                 Label(item.title, systemImage: item.systemImage)
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 180)
@@ -44,10 +49,17 @@ struct RootView: View {
             case .study:
                 StudyView()
             case .session:
-                ContentUnavailableView("실험 세션은 준비 중입니다", systemImage: "timer", description: Text("마일스톤 5에서 구현합니다."))
+                SessionView()
             case .settings:
                 SettingsView()
             }
+        }
+        .onAppear { if model.isSettingsLocked { selection = .session } }
+        .onChange(of: model.isSettingsLocked) { _, locked in
+            if locked { selection = .session }
+        }
+        .onChange(of: selection) { _, item in
+            if let item, !items.contains(item) { selection = .session }
         }
     }
 }

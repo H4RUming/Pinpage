@@ -92,10 +92,18 @@ struct ValueSections: View {
                 Text("AI가 학습 자료에서 연습 문제를 만들고 채점합니다. 실험 세션에서는 사전 퀴즈 결과로 난이도를 정합니다.")
             }
 
-            Section("학습") {
+            Section {
                 IntField(title: "퀴즈 통과 기준", value: passThresholdPercent, range: 0...100, step: 5, unit: "%")
                 IntField(title: "힌트 단계 수", value: $model.settings.learning.hintLevels,
                          range: SettingsLimits.hintLevels, unit: "단계")
+                IntField(title: "사전 퀴즈: 기초 (이 점수 미만)", value: percentBinding(\.preQuizBasicBelow),
+                         range: 0...100, step: 5, unit: "%")
+                IntField(title: "사전 퀴즈: 심화 (이 점수 이상)", value: percentBinding(\.preQuizAdvancedFrom),
+                         range: 0...100, step: 5, unit: "%")
+            } header: {
+                Text("학습")
+            } footer: {
+                Text("체크포인트 퀴즈는 통과 기준 이상이면 통과합니다. 도구 조건에서는 사전 퀴즈 점수로 연습 문제 난이도를 정합니다 (두 기준 사이는 보통).")
             }
         }
         .disabled(model.isSettingsLocked)
@@ -111,6 +119,14 @@ struct ValueSections: View {
                 // 설정 파일에서도 순서가 같도록 정해진 순서로 정렬한다.
                 model.settings.practice.problemTypes = ProblemType.allCases.filter(types.contains)
             }
+        )
+    }
+
+    private func percentBinding(_ keyPath: WritableKeyPath<LearningSettings, Double>) -> Binding<Int> {
+        @Bindable var model = model
+        return Binding(
+            get: { Int((model.settings.learning[keyPath: keyPath] * 100).rounded()) },
+            set: { model.settings.learning[keyPath: keyPath] = Double($0) / 100 }
         )
     }
 

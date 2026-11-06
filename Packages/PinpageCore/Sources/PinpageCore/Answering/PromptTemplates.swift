@@ -8,6 +8,7 @@ import Foundation
 /// - `problem-system.md`, `problem-user.md`: 연습 문제 만들기
 /// - `problem-check-system.md`, `problem-check-user.md`: 만든 객관식을 자료만으로 풀어 정답 검증
 /// - `grade-system.md`, `grade-user.md`: 답안 채점
+/// - `prequiz-system.md`, `prequiz-user.md`: 사전 퀴즈 만들기 (진행자용, 연습 문제와 같은 출력 형식)
 ///
 /// 자리표시자는 `{{이름}}` 형식이다 (파일마다 쓰는 이름은 각 기능의 코드 주석 참고).
 public struct PromptTemplates: Equatable, Sendable {
@@ -22,10 +23,13 @@ public struct PromptTemplates: Equatable, Sendable {
     public let problemCheckUser: String
     public let gradeSystem: String
     public let gradeUser: String
+    public let prequizSystem: String
+    public let prequizUser: String
 
     public init(answerSystem: String, answerUser: String, hintSystem: String, hints: [String],
                 problemSystem: String = "", problemUser: String = "", problemCheckSystem: String = "",
-                problemCheckUser: String = "", gradeSystem: String = "", gradeUser: String = "") {
+                problemCheckUser: String = "", gradeSystem: String = "", gradeUser: String = "",
+                prequizSystem: String = "", prequizUser: String = "") {
         self.answerSystem = answerSystem
         self.answerUser = answerUser
         self.hintSystem = hintSystem
@@ -36,6 +40,8 @@ public struct PromptTemplates: Equatable, Sendable {
         self.problemCheckUser = problemCheckUser
         self.gradeSystem = gradeSystem
         self.gradeUser = gradeUser
+        self.prequizSystem = prequizSystem
+        self.prequizUser = prequizUser
     }
 
     /// `name`(확장자 제외)으로 템플릿 내용을 찾는 함수로 읽는다 (앱 번들, 폴더, 테스트 모두 같은 방식).
@@ -59,6 +65,8 @@ public struct PromptTemplates: Equatable, Sendable {
         problemCheckUser = try required("problem-check-user")
         gradeSystem = try required("grade-system")
         gradeUser = try required("grade-user")
+        prequizSystem = try required("prequiz-system")
+        prequizUser = try required("prequiz-user")
     }
 
     /// 앱 번들의 템플릿.
@@ -71,7 +79,7 @@ public struct PromptTemplates: Equatable, Sendable {
     /// 로그에 남기는 템플릿 식별값. 문구가 한 글자라도 바뀌면 달라진다.
     public var fingerprint: String {
         var hash: UInt64 = 0xcbf29ce484222325  // FNV-1a
-        for part in [answerSystem, answerUser, hintSystem] + hints + [problemSystem, problemUser, problemCheckSystem, problemCheckUser, gradeSystem, gradeUser] {
+        for part in [answerSystem, answerUser, hintSystem] + hints + [problemSystem, problemUser, problemCheckSystem, problemCheckUser, gradeSystem, gradeUser, prequizSystem, prequizUser] {
             for byte in part.utf8 {
                 hash ^= UInt64(byte)
                 hash &*= 0x100000001b3

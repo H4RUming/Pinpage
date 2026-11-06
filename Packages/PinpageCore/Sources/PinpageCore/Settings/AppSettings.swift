@@ -215,11 +215,15 @@ public struct LearningSettings: Codable, Equatable, Sendable {
     public var quizPassThreshold = 0.8
     /// 힌트 단계 수.
     public var hintLevels = 3
+    /// 사전 퀴즈 점수가 이 비율보다 낮으면 연습 문제 난이도를 기초(1)로 한다.
+    public var preQuizBasicBelow = 0.4
+    /// 사전 퀴즈 점수가 이 비율 이상이면 심화(3)로 한다. 그 사이는 보통(2).
+    public var preQuizAdvancedFrom = 0.75
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case quizPassThreshold, hintLevels
+        case quizPassThreshold, hintLevels, preQuizBasicBelow, preQuizAdvancedFrom
     }
 
     public init(from decoder: Decoder) throws {
@@ -227,6 +231,8 @@ public struct LearningSettings: Codable, Equatable, Sendable {
         let d = LearningSettings()
         quizPassThreshold = try c.decode(forKey: .quizPassThreshold, default: d.quizPassThreshold)
         hintLevels = try c.decode(forKey: .hintLevels, default: d.hintLevels)
+        preQuizBasicBelow = try c.decode(forKey: .preQuizBasicBelow, default: d.preQuizBasicBelow)
+        preQuizAdvancedFrom = try c.decode(forKey: .preQuizAdvancedFrom, default: d.preQuizAdvancedFrom)
     }
 }
 

@@ -100,6 +100,11 @@ extension AppSettings {
 
         checkRange(learning.quizPassThreshold, SettingsLimits.quizPassThreshold, field: "퀴즈 통과 기준")
         checkRange(learning.hintLevels, SettingsLimits.hintLevels, field: "힌트 단계 수")
+        checkRange(learning.preQuizBasicBelow, SettingsLimits.quizPassThreshold, field: "사전 퀴즈 기초 기준")
+        checkRange(learning.preQuizAdvancedFrom, SettingsLimits.quizPassThreshold, field: "사전 퀴즈 심화 기준")
+        if learning.preQuizBasicBelow > learning.preQuizAdvancedFrom {
+            issues.append(SettingsIssue(field: "사전 퀴즈 심화 기준", message: "기초 기준(\(Int((learning.preQuizBasicBelow * 100).rounded()))%) 이상이어야 합니다."))
+        }
 
         return issues
     }

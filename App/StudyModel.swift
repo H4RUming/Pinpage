@@ -60,7 +60,8 @@ final class StudyModel {
     private var prefetched: PracticeProblem?
     private var prefetchTask: Task<Void, Never>?
     private var shownAt = Date()
-    private var practiceSetId: String?
+    /// 세트와 세션이 바뀌면 화면을 비운다.
+    private var practiceKey: String?
 
     // 질문과 힌트
     var question = ""
@@ -79,10 +80,22 @@ final class StudyModel {
     var isSolved: Bool { attempts.last?.attempt.verdict == .correct }
     private var logger: EventLogger? { app.eventLogger }
 
+    /// 연습 문제와 질문에 쓰는 학습 세트. 실험 세션 중에는 세션의 세트.
+    var activeSetId: String? { app.sessionModel?.studySetId ?? app.libraryModel?.selectedSetId }
+    /// 실험 세션 중이면 세션 ID (문제를 세션별로 나눈다).
+    private var sessionId: String? { app.sessionModel?.session?.id }
+    /// 실험 세션에서는 사전 퀴즈로 정한 난이도, 아니면 설정값.
+    private var difficulty: Int { app.sessionModel?.session?.practiceDifficulty ?? app.settings.practice.difficulty }
+
     /// 답변·문제를 만들 수 없는 이유 (설정이 덜 됐거나 세트가 없음).
     var unavailableReason: String? {
+        guard activeSetId != nil else { return configurationIssue ?? "학습 세트를 먼저 만들고 자료를 넣으세요." }
+        return configurationIssue
+    }
+
+    /// AI 연결 설정 문제 (템플릿, 모델, 주소, 추가 파라미터).
+    var configurationIssue: String? {
         if case .failure(let error) = app.promptTemplates { return error.localizedDescription }
-        guard app.libraryModel?.selectedSetId != nil else { return "학습 세트를 먼저 만들고 자료를 넣으세요." }
         if app.settings.chat.model.isEmpty { return "설정 탭에서 Chat API 주소와 모델을 지정하세요." }
         if (try? app.settings.chatEndpoint()) == nil { return "설정 탭에서 Chat API 주소를 확인하세요." }
         if app.settings.generation.extraBody == nil { return "설정 탭의 추가 요청 파라미터가 JSON 객체가 아닙니다." }
@@ -91,11 +104,11 @@ final class StudyModel {
 
     // MARK: - 연습 문제
 
-    /// 학습 화면이 열리거나 세트가 바뀌면 부른다. 풀던 문제가 없으면 다음 문제를 꺼낸다.
+    /// 학습 화면이 열리거나 세트·세션이 바뀌면 부른다. 풀던 문제가 없으면 다음 문제를 꺼낸다.
     func startPracticeIfNeeded() {
-        let setId = app.libraryModel?.selectedSetId
-        if practiceSetId != setId {
-            practiceSetId = setId
+        let key = "\(activeSetId ?? "")|\(sessionId ?? "")"
+        if practiceKey != key {
+            practiceKey = key
             prefetchTask?.cancel()
             prefetched = nil
             currentProblem = nil
@@ -110,7 +123,7 @@ final class StudyModel {
 
     /// 다음 문제로 넘어간다. 풀지 않은 문제를 넘기면 건너뛰기로 기록한다.
     func nextProblem() {
-        guard let setId = app.libraryModel?.selectedSetId else { return }
+        guard let setId = activeSetId else { return }
         if let current = currentProblem, !isSolved {
             logger?.log(.problemSkipped, ProblemSkippedPayload(
                 problemId: current.id, attempts: attempts.count, elapsedMs: elapsedMs()))
@@ -121,7 +134,7 @@ final class StudyModel {
             show(ready)
             return
         }
-        if let leftover = try? leftoverProblem(setId: setId) {
+        if let leftover = try? leftoverProblem(setId: setId, sessionId: sessionId) {
             show(leftover)
             return
         }
@@ -172,12 +185,15 @@ final class StudyModel {
 
     private func prefetchIfNeeded() {
         guard prefetched == nil, prefetchTask == nil, let setId = currentProblem?.setId else { return }
+        let sessionId = sessionId
+        let difficulty = difficulty
+        let key = practiceKey
         prefetchTask = Task { [weak self] in
             guard let self, let generator = makeGenerator() else { return }
             defer { prefetchTask = nil }
-            if let output = try? await generator.generate(setId: setId, types: app.settings.practice.problemTypes,
-                                                          difficulty: app.settings.practice.difficulty),
-               !Task.isCancelled, practiceSetId == setId {
+            if let output = try? await generator.generate(setId: setId, sessionId: sessionId,
+                                                          types: app.settings.practice.problemTypes, difficulty: difficulty),
+               !Task.isCancelled, practiceKey == key {
                 logGenerated(output)
                 prefetched = output.problem
             }
@@ -188,13 +204,16 @@ final class StudyModel {
         guard let generator = makeGenerator() else { return }
         isGeneratingProblem = true
         problemError = nil
-        let settings = app.settings.practice
+        let types = app.settings.practice.problemTypes
+        let sessionId = sessionId
+        let difficulty = difficulty
+        let key = practiceKey
         Task {
             defer { isGeneratingProblem = false }
             do {
-                let output = try await generator.generate(setId: setId, types: settings.problemTypes, difficulty: settings.difficulty)
+                let output = try await generator.generate(setId: setId, sessionId: sessionId, types: types, difficulty: difficulty)
                 logGenerated(output)
-                guard practiceSetId == setId else { return }
+                guard practiceKey == key else { return }
                 then(output.problem)
             } catch let error as ProblemGenerationError {
                 if case .noValidProblem(let failures) = error {
@@ -215,11 +234,12 @@ final class StudyModel {
         logger?.log(.problemGenerated, ProblemGeneratedPayload(problem: output.problem))
     }
 
-    /// 앞서 만들어 두고 보여주지 않은 문제.
-    private func leftoverProblem(setId: String) throws -> PracticeProblem? {
+    /// 앞서 만들어 두고 보여주지 않은 문제. 실험 세션 중에는 그 세션에서 만든 문제만.
+    private func leftoverProblem(setId: String, sessionId: String?) throws -> PracticeProblem? {
         try app.libraryModel?.library.database.writer.read { db in
             try PracticeProblem
-                .filter(Column("setId") == setId && Column("status") == ProblemStatus.generated.rawValue)
+                .filter(Column("setId") == setId && Column("sessionId") == sessionId
+                    && Column("status") == ProblemStatus.generated.rawValue)
                 .order(Column("createdAt"))
                 .fetchOne(db)
         }
@@ -320,7 +340,7 @@ final class StudyModel {
             entries.append(entry)
             return
         }
-        guard let setId = app.libraryModel?.selectedSetId, let engine = makeEngine() else { return }
+        guard let setId = activeSetId, let engine = makeEngine() else { return }
         entries.append(entry)
         isBusy = true
         let problemId = currentProblem?.id
