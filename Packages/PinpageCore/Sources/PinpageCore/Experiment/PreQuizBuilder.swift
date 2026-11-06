@@ -97,8 +97,18 @@ public struct PreQuizBuilder: Sendable {
             QuizQuestion(id: id, type: .multipleChoice, prompt: problem.question, choices: problem.choices,
                          answer: (problem.answerIndex ?? 0) + 1, points: 1, source: source)
         case .shortAnswer, .essay:
-            QuizQuestion(id: id, type: .shortAnswer, prompt: problem.question, answers: problem.acceptedAnswers,
+            QuizQuestion(id: id, type: .shortAnswer, prompt: problem.question, answers: distinctAnswers(problem.acceptedAnswers),
                          points: 1, source: source)
+        }
+    }
+
+    /// 채점에서 같은 답으로 보는 표기(공백·대소문자·문장부호만 다름)는 처음 것만 남긴다.
+    /// 모델이 같은 정답을 여러 번 되풀이해 쓰는 경우가 있어 진행자가 검토하기 쉽게 정리한다.
+    static func distinctAnswers(_ answers: [String]) -> [String] {
+        var seen = Set<[Character]>()
+        return answers.filter { answer in
+            let key = QuoteVerifier.normalize(answer)
+            return !key.isEmpty && seen.insert(key).inserted
         }
     }
 

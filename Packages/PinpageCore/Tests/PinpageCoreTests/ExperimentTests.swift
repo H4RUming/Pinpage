@@ -527,6 +527,12 @@ extension ChatStubbed {
             String(decoding: try! JSONSerialization.data(withJSONObject: object), as: UTF8.self)
         }
 
+        @Test("단답형 정답 목록에서 채점상 같은 표기를 한 번만 남긴다")
+        func distinctAnswers() {
+            #expect(PreQuizBuilder.distinctAnswers(["import", "Import", "import ", "임포트", "?", "import."]) == ["import", "임포트"])
+            #expect(PreQuizBuilder.distinctAnswers(["메모리 공유", "메모리공유", "메모리를 공유", "메모리 공유"]) == ["메모리 공유", "메모리를 공유"])
+        }
+
         @Test("고르게 떨어진 위치를 고른다")
         func spread() {
             #expect(PreQuizBuilder.spreadIndices(count: 3, in: 9) == [1, 4, 7])
