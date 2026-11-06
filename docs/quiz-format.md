@@ -130,3 +130,5 @@
 | `session_resumed` | 다시 열었을 때 꺼져 있던 시간, 지난번에 정상 종료했는지, 그때까지의 단계별 시간 |
 | `session_ended` | 종료 이유(통과 / 제출 / 중단), 단계별 시간, 통과까지 걸린 시간(사전 퀴즈 제외), 체크포인트 응시 횟수 |
 | `document_opened`, `document_searched` | 자료 뷰어에서 연 문서(목록 또는 근거 위치), 문서 안 찾기 검색어와 찾은 개수 |
+
+내보내기 파일(세션 요약 CSV, 문항별 응답 CSV)의 형식은 [log-format.md](log-format.md)를 보세요.

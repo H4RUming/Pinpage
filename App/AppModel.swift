@@ -107,6 +107,10 @@ final class AppModel {
         }
         embeddingManager.refresh(settings: settings)
         studyModel = StudyModel(app: self)
+        // 진행 중인 세션이 있으면 앱 실행 기록에도 세션·참가자 ID를 붙인다 (참가자별 내보내기에 들어가도록).
+        if let active = try? sessionStore?.activeSession() {
+            eventLogger?.context = EventLogger.Context(sessionId: active.id, participantId: active.participantId)
+        }
         eventLogger?.log(.appLaunch, AppStatePayload(reason: "launch"))
         sessionModel = SessionModel(app: self, store: sessionStore)
         observeLifecycle()

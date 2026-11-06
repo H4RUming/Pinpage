@@ -207,6 +207,8 @@ final class SessionModel {
         } catch {
             errorMessage = "진행 중인 세션을 복구하지 못했습니다: \(error.localizedDescription)"
             logger?.log(.error, ErrorPayload(context: "session_restore", message: error.localizedDescription))
+            // 세션을 열기 전에 실패했으면 앱 실행 때 붙인 세션 ID를 뗀다.
+            if session == nil { logger?.context = EventLogger.Context() }
         }
     }
 
@@ -341,6 +343,54 @@ final class SessionModel {
     }
 
     private var policy: DifficultyPolicy { DifficultyPolicy(settings: app.settings.learning) }
+
+    // MARK: - 로그 내보내기
+
+    struct ExportRequest: Identifiable {
+        let id = UUID()
+        /// 미리 고를 참가자 (세션 요약 화면에서 열었을 때)
+        let participantId: String?
+    }
+
+    struct ExportOutcome {
+        let url: URL
+        let sessionCount: Int
+        let eventCount: Int
+        let quizItemCount: Int
+        let sha256: String
+    }
+
+    /// 내보내기 창을 연다 (세션 중에는 열지 않는다).
+    var exportRequest: ExportRequest?
+
+    func requestExport(participantId: String? = nil) {
+        guard !isActive else { return }
+        exportRequest = ExportRequest(participantId: participantId)
+    }
+
+    func exportParticipants() -> [ExportParticipant] {
+        guard let store else { return [] }
+        return (try? LogExporter(database: store.database).participants()) ?? []
+    }
+
+    /// 저장 위치를 물은 뒤 zip 파일로 저장하고 `log_exported`를 남긴다. 취소하면 nil.
+    func exportLog(_ scope: LogExportScope) throws -> ExportOutcome? {
+        guard let store, !isActive else { return nil }
+        let export = try LogExporter(database: store.database).export(
+            scope, environment: LogExportEnvironment(appInfo: app.appInfo, fallbackModel: app.settings.chat.model))
+        let archive = try export.archive()
+        let panel = NSSavePanel()
+        panel.title = "로그 내보내기"
+        panel.message = "이 파일 하나를 진행자에게 보내세요. API 키는 들어가지 않습니다."
+        panel.nameFieldStringValue = export.suggestedFileName
+        panel.allowedContentTypes = [.zip]
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        try archive.write(to: url, options: .atomic)
+        let payload = LogExportedPayload(export: export, fileName: url.lastPathComponent, archive: archive)
+        logger?.log(.logExported, payload)
+        return ExportOutcome(url: url, sessionCount: export.sessionCount, eventCount: export.eventCount,
+                             quizItemCount: export.quizItemCount, sha256: payload.sha256)
+    }
 
     // MARK: - 시간
 

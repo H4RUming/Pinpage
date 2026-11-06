@@ -78,6 +78,18 @@ struct SessionStartView: View {
                 Text(flowDescription)
             }
 
+            Section {
+                HStack {
+                    Text("이 Mac에 저장된 실험 기록을 파일 하나(zip)로 저장합니다.")
+                    Spacer()
+                    Button("로그 내보내기…") { model.requestExport() }
+                }
+            } header: {
+                Text("로그")
+            } footer: {
+                Text("세션을 모두 마친 뒤 자기 참가자 ID를 골라 내보내고, 그 파일을 진행자에게 보내세요.")
+            }
+
             if !model.pastSessions.isEmpty {
                 Section("이 Mac의 지난 세션") {
                     ForEach(model.pastSessions) { past in

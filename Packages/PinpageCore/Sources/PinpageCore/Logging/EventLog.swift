@@ -27,6 +27,7 @@ public enum EventType: String, Codable, CaseIterable, Sendable {
     case practiceDifficultySet = "practice_difficulty_set"
     case documentOpened = "document_opened"
     case documentSearched = "document_searched"
+    case logExported = "log_exported"
 }
 
 /// DB에 저장된 이벤트 한 줄.

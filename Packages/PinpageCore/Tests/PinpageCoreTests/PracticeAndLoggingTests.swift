@@ -382,7 +382,7 @@ struct EventLogTests {
             "problem_shown", "problem_answered", "problem_skipped", "question_asked", "answer_received",
             "hint_requested", "hint_received", "citation_opened", "llm_call", "error",
             "session_started", "session_resumed", "session_ended", "quiz_started", "quiz_submitted",
-            "practice_difficulty_set", "document_opened", "document_searched",
+            "practice_difficulty_set", "document_opened", "document_searched", "log_exported",
         ])
     }
 }

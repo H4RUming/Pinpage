@@ -12,12 +12,17 @@ struct SessionView: View {
             if let current = session.session {
                 SessionRunView(model: session, session: current)
             } else if let summary = session.summary {
-                SessionSummaryView(summary: summary) { session.dismissSummary() }
+                SessionSummaryView(summary: summary,
+                                   export: { session.requestExport(participantId: summary.session.participantId) },
+                                   dismiss: { session.dismissSummary() })
             } else {
                 SessionStartView(model: session)
             }
         }
         .navigationTitle("실험 세션")
+        .sheet(item: $session.exportRequest) { request in
+            LogExportView(model: session, preselected: request.participantId)
+        }
         .alert("확인이 필요합니다",
                isPresented: Binding(get: { session.errorMessage != nil }, set: { if !$0 { session.errorMessage = nil } })) {
             Button("확인") {}
@@ -30,6 +35,7 @@ struct SessionView: View {
 /// 끝난 세션 요약.
 private struct SessionSummaryView: View {
     let summary: SessionModel.Summary
+    let export: () -> Void
     let dismiss: () -> Void
 
     var body: some View {
@@ -69,9 +75,12 @@ private struct SessionSummaryView: View {
             Text("기록은 이 Mac에 저장되었습니다. 진행자의 안내에 따라 다음 단계를 진행하세요.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            Button("확인", action: dismiss)
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
+            HStack {
+                Button("로그 내보내기…", action: export)
+                Button("확인", action: dismiss)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+            }
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
